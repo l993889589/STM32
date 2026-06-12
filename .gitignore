@@ -1,0 +1,30 @@
+# Archives and generated packages
+*.zip
+ota_package/
+
+# Keil / Arm build outputs and local IDE state
+**/MDK-ARM/*.log
+**/MDK-ARM/STM32H563_Threadx_usbx_cdc_acm/
+**/*.uvguix.*
+**/*.scvd
+**/*.dep
+**/*.d
+**/*.o
+**/*.obj
+**/*.axf
+**/*.elf
+**/*.hex
+**/*.bin
+**/*.map
+**/*.lst
+**/*.lnp
+**/*.crf
+
+# Node / Electron generated files
+**/node_modules/
+**/dist/
+**/release/
+**/release-next/
+
+# Local nested scratch repository
+stm32-h563/
