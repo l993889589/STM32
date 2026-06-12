@@ -900,6 +900,16 @@
               <FileType>5</FileType>
               <FilePath>..\user\bsp\bsp_pwm.h</FilePath>
             </File>
+            <File>
+              <FileName>bsp_uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\bsp\bsp_uart.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_uart.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\bsp\bsp_uart.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

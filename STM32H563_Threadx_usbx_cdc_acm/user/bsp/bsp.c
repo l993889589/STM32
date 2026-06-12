@@ -6,6 +6,7 @@ void bsp_init(void)
 {
     (void)bsp_dwt_init();
     bsp_timer_init();
+    bsp_uart_init();
     bsp_w800_reset_release();
     bsp_led_off(BSP_LED_STATUS);
 }

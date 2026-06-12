@@ -14,13 +14,11 @@ __asm(".global __use_no_semihosting\n");
 #include "at_module_w800.h"
 #include "at_session.h"
 #include "bsp.h"
-#include "dcache.h"
 #include "ldc_core.h"
 #include "ldc_proto_dispatcher.h"
 #include "modbus_slave.h"
 #include "mqtt_packet.h"
 #include "ota_layout.h"
-#include "usart.h"
 
 #ifndef TX_TIMER_TICKS_PER_SECOND
 #define TX_TIMER_TICKS_PER_SECOND       1000U
@@ -455,19 +453,16 @@ static int app_rs485_modbus_tx(const uint8_t *data, uint16_t len, void *arg)
     if(!data || len == 0U)
         return 0;
 
-    if(HAL_UART_Transmit(&huart2, (uint8_t *)data, len, APP_RS485_TX_TIMEOUT_MS) != HAL_OK)
-        return 0;
-
-    while(__HAL_UART_GET_FLAG(&huart2, UART_FLAG_TC) == RESET)
-    {
-    }
-
-    return (int)len;
+    return (bsp_uart_write_wait_complete(BSP_UART_RS485, data, len, APP_RS485_TX_TIMEOUT_MS) == (int)len) ? (int)len : 0;
 }
 
-static void app_rs485_uart_restart_rx(void)
+static void app_rs485_uart_rx_callback(bsp_uart_port_t port, const uint8_t *data, uint16_t len, void *arg)
 {
-    (void)HAL_UARTEx_ReceiveToIdle_IT(&huart2, g_rs485_uart_rx_buf, sizeof(g_rs485_uart_rx_buf));
+    (void)port;
+    (void)arg;
+
+    if(data && len != 0U)
+        (void)ldc_write(&g_rs485_ldc, data, len);
 }
 
 static void app_rs485_process_packets(void)
@@ -498,7 +493,7 @@ static int app_w800_at_tx(const uint8_t *data, uint16_t len, void *arg)
     if(!data || len == 0U)
         return -1;
 
-    return (HAL_UART_Transmit(&huart1, (uint8_t *)data, len, APP_W800_TX_TIMEOUT_MS) == HAL_OK) ? 0 : -1;
+    return (bsp_uart_write(BSP_UART_W800_AT, data, len, APP_W800_TX_TIMEOUT_MS) == (int)len) ? 0 : -1;
 }
 
 static void app_w800_drain_ldc(void)
@@ -521,13 +516,13 @@ static void app_w800_poll_at(void *arg)
         app_w800_drain_ldc();
 }
 
-static void app_w800_uart_restart_rx(void)
+static void app_w800_uart_rx_callback(bsp_uart_port_t port, const uint8_t *data, uint16_t len, void *arg)
 {
-    if(HAL_UARTEx_ReceiveToIdle_DMA(&huart1, g_w800_uart_rx_buf, sizeof(g_w800_uart_rx_buf)) == HAL_OK)
-    {
-        if(huart1.hdmarx)
-            __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
-    }
+    (void)port;
+    (void)arg;
+
+    if(data && len != 0U)
+        (void)ldc_write(&g_w800_ldc, data, len);
 }
 
 static bool app_w800_mqtt_connect(void)
@@ -617,7 +612,8 @@ UINT app_board_io_init(void)
     (void)ldc_proto_dispatcher_register(&g_rs485_dispatcher, modbus_slave_dispatch, &g_modbus_slave);
 
     g_rs485_packet_pending = 0U;
-    app_rs485_uart_restart_rx();
+    (void)bsp_uart_register_rx_callback(BSP_UART_RS485, app_rs485_uart_rx_callback, NULL);
+    (void)bsp_uart_start_rx(BSP_UART_RS485, g_rs485_uart_rx_buf, sizeof(g_rs485_uart_rx_buf));
 
     ldc_init(&g_w800_ldc, g_w800_ldc_ring, sizeof(g_w800_ldc_ring), g_w800_packets, APP_W800_PACKET_COUNT);
     ldc_set_lock(&g_w800_ldc, app_ldc_irq_lock, app_ldc_irq_unlock, NULL);
@@ -636,7 +632,8 @@ UINT app_board_io_init(void)
     at_session_set_logger(&g_w800_at, app_w800_at_log, NULL);
     at_session_set_poll_callback(&g_w800_at, app_w800_poll_at, NULL);
     at_module_init(&g_w800_module, &g_w800_at, &g_at_module_w800, NULL);
-    app_w800_uart_restart_rx();
+    (void)bsp_uart_register_rx_callback(BSP_UART_W800_AT, app_w800_uart_rx_callback, NULL);
+    (void)bsp_uart_start_rx(BSP_UART_W800_AT, g_w800_uart_rx_buf, sizeof(g_w800_uart_rx_buf));
 
     g_initialized = true;
     return TX_SUCCESS;
@@ -826,43 +823,6 @@ void app_w800_task_entry(ULONG thread_input)
             break;
         }
     }
-}
-
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
-{
-    if(huart->Instance == USART2)
-    {
-        if(size > sizeof(g_rs485_uart_rx_buf))
-            size = sizeof(g_rs485_uart_rx_buf);
-
-        if(size != 0U)
-            (void)ldc_write(&g_rs485_ldc, g_rs485_uart_rx_buf, size);
-
-        app_rs485_uart_restart_rx();
-    }
-    else if(huart->Instance == USART1)
-    {
-        if(size > sizeof(g_w800_uart_rx_buf))
-            size = sizeof(g_w800_uart_rx_buf);
-
-        if(size != 0U)
-        {
-            (void)HAL_DCACHE_InvalidateByAddr(&hdcache1,
-                                               (uint32_t *)g_w800_uart_rx_buf,
-                                               (uint32_t)((size + 31U) & ~31U));
-            (void)ldc_write(&g_w800_ldc, g_w800_uart_rx_buf, size);
-        }
-
-        app_w800_uart_restart_rx();
-    }
-}
-
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
-{
-    if(huart->Instance == USART2)
-        app_rs485_uart_restart_rx();
-    else if(huart->Instance == USART1)
-        app_w800_uart_restart_rx();
 }
 
 void app_led_task_entry(ULONG thread_input)

@@ -7,6 +7,7 @@
 #include "bsp_dwt.h"
 #include "bsp_pwm.h"
 #include "bsp_timer.h"
+#include "bsp_uart.h"
 #include "gd25lq128.h"
 
 #define BSP_VERSION             "0.1.0"
