@@ -35,6 +35,7 @@ typedef struct
     void *data_arg;
     uint8_t active;
     uint8_t connected;
+    const char *last_error;
 } at_nearlink_module_t;
 
 void at_nearlink_init(at_nearlink_module_t *module, at_session_t *session,

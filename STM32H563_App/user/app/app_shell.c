@@ -200,10 +200,11 @@ static int app_shell_cmd_nearlink(shell_t *shell, int argc, char **argv, void *a
     if(argc == 2 && strcmp(argv[1], "status") == 0)
     {
         app_nearlink_get_status(&status);
-        (void)shell_printf(shell, "nearlink role=%s active=%u connected=%u pending=%u local=%s peer=%s\r\n",
+        (void)shell_printf(shell, "nearlink role=%s active=%u connected=%u pending=%u local=%s peer=%s last=%s\r\n",
                            status.role == AT_NEARLINK_ROLE_SERVER ? "server" : "client",
                            status.active, status.connected, status.apply_pending,
-                           status.local_name, status.peer_name);
+                           status.local_name, status.peer_name,
+                           status.last_error ? status.last_error : "none");
         return 0;
     }
     if(argc >= 3 && strcmp(argv[1], "role") == 0)

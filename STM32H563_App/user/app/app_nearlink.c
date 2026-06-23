@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
+
 
 #include "app_board_io.h"
 #include "app_config.h"
@@ -37,13 +39,25 @@ static void app_nearlink_log(const char *line, void *arg)
     }
 }
 
+static void nearlink_log(const char *fmt, ...)
+{
+    char buf[128];
+
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    app_usb_cdc_write((uint8_t *)buf, strlen(buf));
+}
+
 static int app_nearlink_tx(const uint8_t *data, uint16_t len, void *arg)
 {
     (void)arg;
     return bsp_uart_write(BSP_UART_NEARLINK, data, len, 1000U) == (int)len ? 0 : -1;
 }
 
-static void app_nearlink_reset(void *arg) { (void)arg; bsp_nearlink_hard_reset(100U, 1000U); }
+static void app_nearlink_reset(void *arg) { (void)arg; bsp_nearlink_hard_reset(100U, 3000U); }
 
 static void app_nearlink_data(const char *peer, const uint8_t *data, uint16_t len, void *arg)
 {
@@ -140,6 +154,7 @@ void app_nearlink_get_status(app_nearlink_status_t *status)
     status->apply_pending = g_apply_pending;
     strncpy(status->local_name, g_local_name, sizeof(status->local_name));
     strncpy(status->peer_name, g_peer_name, sizeof(status->peer_name));
+    status->last_error = g_module.last_error ? g_module.last_error : "none";
 }
 
 void app_nearlink_task_entry(ULONG thread_input)
@@ -151,7 +166,9 @@ void app_nearlink_task_entry(ULONG thread_input)
         if(g_apply_pending)
         {
             g_apply_pending = 0U;
-            (void)at_nearlink_stop(&g_module);
+						bool state=at_nearlink_stop(&g_module);
+						nearlink_log("state=%d", state);
+            
             if(!at_nearlink_apply(&g_module, &g_config)) app_nearlink_log("nearlink error: role apply failed", NULL);
         }
         if(g_send_len)

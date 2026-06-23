@@ -13,6 +13,7 @@ typedef struct
     uint8_t apply_pending;
     char local_name[32];
     char peer_name[32];
+    const char *last_error;
 } app_nearlink_status_t;
 
 UINT app_nearlink_init(void);

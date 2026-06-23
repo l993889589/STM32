@@ -72,6 +72,7 @@ void at_nearlink_init(at_nearlink_module_t *module, at_session_t *session,
     module->reset_arg = reset_arg;
     module->data = data;
     module->data_arg = data_arg;
+    module->last_error = "none";
     if(session)
     {
         (void)at_client_register_urc(&session->client, "+SRECVDATA:", nearlink_rx_urc, module);
@@ -93,7 +94,8 @@ static bool nearlink_cmd(at_nearlink_module_t *module, const char *cmd)
 bool at_nearlink_stop(at_nearlink_module_t *module)
 {
     bool ok;
-    if(!module || !module->session) return false;
+    if(!module || !module->session) 
+				return false;
     if(!module->active) return true;
     ok = nearlink_cmd(module, module->role == AT_NEARLINK_ROLE_SERVER ?
                               "AT+SSERVER=0" : "AT+CDISCONNECT");
@@ -107,13 +109,16 @@ bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t 
     char cmd[128];
     if(!module || !module->session || !config || !config->local_name) return false;
     if(module->reset) module->reset(module->reset_arg);
+    module->last_error = "probe";
     if(!at_nearlink_probe(module)) return false;
 
     (void)snprintf(cmd, sizeof(cmd), "AT+SETMODE=%u", (unsigned int)config->role);
+    module->last_error = "set mode";
     if(!nearlink_cmd(module, cmd)) return false;
     if(config->local_address && config->local_address[0])
     {
         (void)snprintf(cmd, sizeof(cmd), "AT+SETSLEADDR=%s", config->local_address);
+        module->last_error = "set address";
         if(!nearlink_cmd(module, cmd)) return false;
     }
 
@@ -122,19 +127,16 @@ bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t 
     if(config->role == AT_NEARLINK_ROLE_SERVER)
     {
         (void)snprintf(cmd, sizeof(cmd), "AT+SSETNAME=%s", config->local_name);
+        module->last_error = "set server name";
         if(!nearlink_cmd(module, cmd)) return false;
     }
     else
     {
         if(!config->peer_name || !config->peer_name[0]) return false;
         (void)snprintf(cmd, sizeof(cmd), "AT+CSETNAME=%s", config->local_name);
+        module->last_error = "set client name";
         if(!nearlink_cmd(module, cmd)) return false;
     }
-
-    /* Address/name settings are persistent and some firmware revisions only
-     * apply them after reboot. Re-probe before starting advertising/scanning. */
-    if(module->reset) module->reset(module->reset_arg);
-    if(!at_nearlink_probe(module)) return false;
 
     if(config->role == AT_NEARLINK_ROLE_SERVER)
     {
@@ -142,6 +144,7 @@ bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t 
             (void)snprintf(cmd, sizeof(cmd), "AT+SSERVER=1,%u,%s", config->auth_type, config->key);
         else
             (void)snprintf(cmd, sizeof(cmd), "AT+SSERVER=1");
+        module->last_error = "start server";
         if(!nearlink_cmd(module, cmd)) return false;
     }
     else
@@ -151,10 +154,12 @@ bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t 
             (void)snprintf(cmd, sizeof(cmd), "AT+CCONNECT=%s,%u,%s", config->peer_name, config->auth_type, config->key);
         else
             (void)snprintf(cmd, sizeof(cmd), "AT+CCONNECT=%s", config->peer_name);
+        module->last_error = "connect server";
         if(!at_session_cmd_expect(module->session, cmd, "OK", NEARLINK_CONNECT_TIMEOUT_MS, 2U)) return false;
         module->connected = 1U;
     }
     module->active = 1U;
+    module->last_error = "none";
     return true;
 }
 
