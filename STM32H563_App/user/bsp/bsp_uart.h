@@ -15,6 +15,7 @@ typedef enum
 
 typedef void (*bsp_uart_rx_cb_t)(bsp_uart_port_t port, const uint8_t *data, uint16_t len, void *arg);
 
+int bsp_uart_bind(bsp_uart_port_t port, UART_HandleTypeDef *handle, uint8_t use_dma, uint8_t cache_invalidate);
 void bsp_uart_init(void);
 int bsp_uart_register_rx_callback(bsp_uart_port_t port, bsp_uart_rx_cb_t cb, void *arg);
 int bsp_uart_start_rx(bsp_uart_port_t port, uint8_t *buf, uint16_t len);
