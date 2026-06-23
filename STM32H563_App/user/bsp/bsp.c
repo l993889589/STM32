@@ -16,6 +16,7 @@ void bsp_init(void)
     bsp_timer_init();
     bsp_uart_init();
     bsp_w800_reset_release();
+    bsp_nearlink_reset_release();
     bsp_led_off(BSP_LED_STATUS);
 		bsp_led_init();
 }
@@ -53,6 +54,24 @@ void bsp_w800_hard_reset(uint32_t assert_ms, uint32_t ready_ms)
     bsp_w800_reset_assert();
     HAL_Delay(assert_ms);
     bsp_w800_reset_release();
+    HAL_Delay(ready_ms);
+}
+
+void bsp_nearlink_reset_assert(void)
+{
+    HAL_GPIO_WritePin(BSP_NEARLINK_RESET_PORT, BSP_NEARLINK_RESET_PIN, GPIO_PIN_RESET);
+}
+
+void bsp_nearlink_reset_release(void)
+{
+    HAL_GPIO_WritePin(BSP_NEARLINK_RESET_PORT, BSP_NEARLINK_RESET_PIN, GPIO_PIN_SET);
+}
+
+void bsp_nearlink_hard_reset(uint32_t assert_ms, uint32_t ready_ms)
+{
+    bsp_nearlink_reset_assert();
+    HAL_Delay(assert_ms);
+    bsp_nearlink_reset_release();
     HAL_Delay(ready_ms);
 }
 
