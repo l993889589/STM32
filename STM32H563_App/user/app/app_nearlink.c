@@ -168,7 +168,7 @@ void app_nearlink_task_entry(ULONG thread_input)
             g_apply_pending = 0U;
 						bool state=at_nearlink_stop(&g_module);
 						nearlink_log("state=%d", state);
-            
+
             if(!at_nearlink_apply(&g_module, &g_config)) app_nearlink_log("nearlink error: role apply failed", NULL);
         }
         if(g_send_len)

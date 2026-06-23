@@ -94,7 +94,7 @@ static bool nearlink_cmd(at_nearlink_module_t *module, const char *cmd)
 bool at_nearlink_stop(at_nearlink_module_t *module)
 {
     bool ok;
-    if(!module || !module->session) 
+    if(!module || !module->session)
 				return false;
     if(!module->active) return true;
     ok = nearlink_cmd(module, module->role == AT_NEARLINK_ROLE_SERVER ?
