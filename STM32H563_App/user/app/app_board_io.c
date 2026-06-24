@@ -11,6 +11,7 @@ __asm(".global __use_no_semihosting\n");
 #include "app_config.h"
 #include "app_ldc_config.h"
 #include "app_nearlink.h"
+#include "app_rs485.h"
 #include "app_shell.h"
 #include "at_module.h"
 #include "at_module_w800.h"
@@ -34,13 +35,6 @@ static ldc_endpoint_t g_usb_endpoint;
 static uint8_t g_usb_ldc_ring[APP_USB_RX_BUF_SIZE + 1U];
 static ldc_packet_t g_usb_packets[APP_USB_PACKET_COUNT];
 
-static ldc_endpoint_t g_rs485_endpoint;
-static uint8_t g_rs485_ldc_ring[APP_RS485_RX_BUF_SIZE + 1U];
-static ldc_packet_t g_rs485_packets[APP_RS485_PACKET_COUNT];
-static uint8_t g_rs485_uart_rx_buf[APP_RS485_UART_RX_BUF_SIZE];
-static modbus_t g_modbus_slave;
-static modbus_mapping_t g_modbus_mapping;
-static uint16_t g_holding_regs[APP_RS485_MODBUS_HOLDING_COUNT];
 static ldc_endpoint_t g_w800_endpoint;
 static uint8_t g_w800_ldc_ring[APP_W800_RX_BUF_SIZE];
 static ldc_packet_t g_w800_packets[APP_W800_PACKET_COUNT];
@@ -540,41 +534,6 @@ static void app_usb_vendor_frame(const usb_vendor_frame_t *frame, void *arg)
     }
 }
 
-static int app_rs485_modbus_tx(const uint8_t *data, uint16_t len, void *arg)
-{
-    (void)arg;
-
-    if(!data || len == 0U)
-        return 0;
-
-    return (bsp_uart_write_wait_complete(BSP_UART_RS485, data, len, APP_RS485_TX_TIMEOUT_MS) == (int)len) ? (int)len : 0;
-}
-
-static void app_rs485_uart_rx_callback(bsp_uart_port_t port, const uint8_t *data, uint16_t len, void *arg)
-{
-    (void)port;
-    (void)arg;
-
-    if(data && len != 0U)
-        (void)ldc_endpoint_write(&g_rs485_endpoint, data, len);
-}
-
-static void app_rs485_process_packets(void)
-{
-    uint8_t frame[APP_RS485_LDC_MAX_FRAME];
-    int len;
-
-    while(ldc_endpoint_packet_count(&g_rs485_endpoint) > 0U)
-    {
-        len = ldc_endpoint_read(&g_rs485_endpoint, frame, sizeof(frame));
-        if(len <= 0)
-            break;
-
-        app_print_hex("rs485 rx", frame, (uint32_t)len);
-        (void)modbus_rtu_slave_process(&g_modbus_slave, frame, (uint16_t)len);
-    }
-}
-
 static int app_w800_at_tx(const uint8_t *data, uint16_t len, void *arg)
 {
     (void)arg;
@@ -681,10 +640,8 @@ static uint16_t app_w800_next_local_port(void)
 
 UINT app_board_io_init(void)
 {
-    const app_ldc_port_config_t *rs485_ldc_config;
     const app_ldc_port_config_t *usb_ldc_config;
     const app_ldc_port_config_t *w800_ldc_config;
-    ldc_endpoint_config_t rs485_endpoint_config;
     ldc_endpoint_config_t usb_endpoint_config;
     ldc_endpoint_config_t w800_endpoint_config;
 
@@ -716,39 +673,8 @@ UINT app_board_io_init(void)
     if(ldc_endpoint_init(&g_usb_endpoint, &usb_endpoint_config) != TX_SUCCESS)
         return TX_START_ERROR;
 
-    rs485_ldc_config = app_ldc_config_get(APP_LDC_PORT_RS485);
-    if(!rs485_ldc_config)
-        return TX_PTR_ERROR;
-
-    rs485_endpoint_config.name = rs485_ldc_config->name;
-    rs485_endpoint_config.ring_buffer = g_rs485_ldc_ring;
-    rs485_endpoint_config.ring_size = sizeof(g_rs485_ldc_ring);
-    rs485_endpoint_config.packet_pool = g_rs485_packets;
-    rs485_endpoint_config.packet_count = APP_RS485_PACKET_COUNT;
-    rs485_endpoint_config.max_frame = rs485_ldc_config->max_frame;
-    rs485_endpoint_config.timeout_ms = rs485_ldc_config->timeout_ms;
-    rs485_endpoint_config.delimiter = rs485_ldc_config->delimiter;
-    rs485_endpoint_config.mode = LDC_MODE_OVERWRITE;
-    if(ldc_endpoint_init(&g_rs485_endpoint, &rs485_endpoint_config) != TX_SUCCESS)
+    if(app_rs485_init() != TX_SUCCESS)
         return TX_START_ERROR;
-
-    for(uint16_t i = 0U; i < APP_RS485_MODBUS_HOLDING_COUNT; i++)
-        g_holding_regs[i] = i;
-
-    modbus_mapping_init(&g_modbus_mapping,
-                        NULL, 0U, 0U,
-                        NULL, 0U, 0U,
-                        g_holding_regs, 0U, APP_RS485_MODBUS_HOLDING_COUNT,
-                        NULL, 0U, 0U);
-    if(modbus_rtu_slave_init(&g_modbus_slave,
-                             APP_RS485_MODBUS_UNIT_ID,
-                             &g_modbus_mapping,
-                             app_rs485_modbus_tx,
-                             NULL) != 0)
-        return TX_PTR_ERROR;
-
-    (void)bsp_uart_register_rx_callback(BSP_UART_RS485, app_rs485_uart_rx_callback, NULL);
-    (void)bsp_uart_start_rx(BSP_UART_RS485, g_rs485_uart_rx_buf, sizeof(g_rs485_uart_rx_buf));
 
     w800_ldc_config = app_ldc_config_get(APP_LDC_PORT_W800_AT);
     if(!w800_ldc_config)
@@ -867,20 +793,6 @@ void app_usb_cdc_process_rx(const uint8_t *data, uint32_t len)
 void app_usb_cdc_service(void)
 {
     app_shell_poll();
-}
-
-void app_rs485_task_entry(ULONG thread_input)
-{
-    ULONG events;
-
-    (void)thread_input;
-
-    for(;;)
-    {
-        if(ldc_endpoint_wait(&g_rs485_endpoint, &events) == TX_SUCCESS &&
-           (events & LDC_ENDPOINT_EVT_PACKET) != 0U)
-            app_rs485_process_packets();
-    }
 }
 
 void app_w800_task_entry(ULONG thread_input)
@@ -1028,7 +940,7 @@ void app_board_get_status(app_board_status_t *status)
                                           &status->vendor_crc_errors,
                                           &status->vendor_length_errors,
                                           &status->vendor_discarded_bytes);
-    modbus_get_stats(&g_modbus_slave, &status->modbus);
+    app_rs485_get_stats(&status->modbus);
 }
 
 void app_board_request_mqtt_reconnect(void)

@@ -837,6 +837,16 @@
               <FilePath>..\user\app\app_board_io.h</FilePath>
             </File>
             <File>
+              <FileName>app_rs485.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\app\app_rs485.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_rs485.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\app\app_rs485.h</FilePath>
+            </File>
+            <File>
               <FileName>app_shell.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\app\app_shell.c</FilePath>
