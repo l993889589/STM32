@@ -141,6 +141,7 @@ static void test_invalid_initialization_is_rejected(void)
     CHECK(ldc_write(NULL, ring, sizeof(ring)) == 0U);
     CHECK(!ldc_putc(NULL, 0U));
     CHECK(!ldc_flush(NULL));
+    CHECK(!ldc_frame_pending(NULL));
 }
 
 static void test_delimiter_fixed_timeout_and_flush(void)
@@ -162,9 +163,11 @@ static void test_delimiter_fixed_timeout_and_flush(void)
 
     fixture_init(&fixture, 32U, 5U, -1, LDC_MODE_PROTECT);
     CHECK(ldc_write(&fixture.ldc, timeout, sizeof(timeout)) == sizeof(timeout));
+    CHECK(ldc_frame_pending(&fixture.ldc));
     ldc_tick(&fixture.ldc, 4U);
     CHECK(ldc_packet_available(&fixture.ldc) == 0U);
     ldc_tick(&fixture.ldc, 1U);
+    CHECK(!ldc_frame_pending(&fixture.ldc));
     CHECK(read_packet(&fixture.ldc, timeout, sizeof(timeout)) != 0);
 
     fixture_init(&fixture, 32U, 0U, -1, LDC_MODE_PROTECT);

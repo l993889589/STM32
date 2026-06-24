@@ -428,6 +428,20 @@ uint16_t ldc_packet_available(ldc_t *ldc)
     return count;
 }
 
+bool ldc_frame_pending(ldc_t *ldc)
+{
+    bool pending;
+    uint32_t state;
+
+    if(!ldc)
+        return false;
+
+    state = ldc_enter(ldc);
+    pending = (ldc->frame_len != 0U);
+    ldc_leave(ldc, state);
+    return pending;
+}
+
 bool ldc_get_stats(ldc_t *ldc, ldc_stats_t *stats)
 {
     uint32_t state;

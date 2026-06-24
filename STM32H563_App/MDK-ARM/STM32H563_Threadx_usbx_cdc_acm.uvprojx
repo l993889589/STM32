@@ -1091,6 +1091,16 @@
               <FileType>5</FileType>
               <FilePath>..\user\ldc\core\ldc_ring.h</FilePath>
             </File>
+            <File>
+              <FileName>ldc_endpoint_threadx.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\ldc\ldc_endpoint_threadx.c</FilePath>
+            </File>
+            <File>
+              <FileName>ldc_endpoint_threadx.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\ldc\ldc_endpoint_threadx.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

@@ -105,6 +105,7 @@ bool ldc_discard_frame(ldc_t *ldc);
 int ldc_read_packet(ldc_t *ldc, uint8_t *buf, uint32_t size);
 
 uint16_t ldc_packet_available(ldc_t *ldc);
+bool ldc_frame_pending(ldc_t *ldc);
 bool ldc_get_stats(ldc_t *ldc, ldc_stats_t *stats);
 void ldc_dump_stats(ldc_t *ldc);
 
