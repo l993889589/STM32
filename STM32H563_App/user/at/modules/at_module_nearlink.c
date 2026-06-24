@@ -83,7 +83,7 @@ void at_nearlink_init(at_nearlink_module_t *module, at_session_t *session,
 bool at_nearlink_probe(at_nearlink_module_t *module)
 {
     return module && module->session &&
-           at_session_cmd_expect(module->session, "AT", "OK", 1000U, 3U);
+           at_session_cmd_expect(module->session, "AT", "OK", 3000U, 3U);
 }
 
 static bool nearlink_cmd(at_nearlink_module_t *module, const char *cmd)
@@ -91,26 +91,89 @@ static bool nearlink_cmd(at_nearlink_module_t *module, const char *cmd)
     return at_session_cmd_expect(module->session, cmd, "OK", NEARLINK_CMD_TIMEOUT_MS, 2U);
 }
 
-bool at_nearlink_stop(at_nearlink_module_t *module)
+static bool nearlink_query_mode(at_nearlink_module_t *module, at_nearlink_role_t *role)
 {
-    bool ok;
-    if(!module || !module->session)
-				return false;
-    if(!module->active) return true;
-    ok = nearlink_cmd(module, module->role == AT_NEARLINK_ROLE_SERVER ?
-                              "AT+SSERVER=0" : "AT+CDISCONNECT");
+    const char *value;
+
+    if(!module || !module->session || !role)
+        return false;
+
+    if(!at_session_cmd_expect(module->session, "AT+SETMODE?", "OK",
+                              NEARLINK_CMD_TIMEOUT_MS, 1U))
+        return false;
+
+    value = strstr(at_session_capture(module->session), "+SETMODE:");
+    if(!value)
+        return false;
+
+    value += strlen("+SETMODE:");
+    while(*value == ' ')
+        value++;
+
+    if(*value == '0')
+        *role = AT_NEARLINK_ROLE_CLIENT;
+    else if(*value == '1')
+        *role = AT_NEARLINK_ROLE_SERVER;
+    else
+        return false;
+
+    return true;
+}
+
+static bool nearlink_quiesce(at_nearlink_module_t *module)
+{
+    at_nearlink_role_t role;
+
+    if(!nearlink_query_mode(module, &role))
+        return false;
+
+    if(role == AT_NEARLINK_ROLE_SERVER)
+    {
+        if(!at_session_cmd_expect(module->session, "AT+SSERVER?", "OK",
+                                  NEARLINK_CMD_TIMEOUT_MS, 1U))
+            return false;
+
+        if(strstr(at_session_capture(module->session), "+SSERVER:1") != NULL &&
+           !nearlink_cmd(module, "AT+SSERVER=0"))
+            return false;
+    }
+    else
+    {
+        /* The command may report ERROR when no server is connected. */
+        (void)at_session_cmd_expect(module->session, "AT+CDISCONNECT", "OK",
+                                    NEARLINK_CMD_TIMEOUT_MS, 1U);
+    }
+
     module->active = 0U;
     module->connected = 0U;
-    return ok;
+    return true;
+}
+
+bool at_nearlink_stop(at_nearlink_module_t *module)
+{
+    if(!module || !module->session)
+        return false;
+
+    return nearlink_quiesce(module);
 }
 
 bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t *config)
 {
     char cmd[128];
     if(!module || !module->session || !config || !config->local_name) return false;
-    if(module->reset) module->reset(module->reset_arg);
+
     module->last_error = "probe";
-    if(!at_nearlink_probe(module)) return false;
+    if(!at_nearlink_probe(module))
+    {
+        if(module->reset)
+            module->reset(module->reset_arg);
+        if(!at_nearlink_probe(module))
+            return false;
+    }
+
+    module->last_error = "stop previous role";
+    if(!nearlink_quiesce(module))
+        return false;
 
     (void)snprintf(cmd, sizeof(cmd), "AT+SETMODE=%u", (unsigned int)config->role);
     module->last_error = "set mode";
@@ -137,6 +200,20 @@ bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t 
         module->last_error = "set client name";
         if(!nearlink_cmd(module, cmd)) return false;
     }
+
+    /* SSETNAME/CSETNAME only take effect after the module restarts. */
+    module->last_error = "restart after config";
+    if(module->reset)
+        module->reset(module->reset_arg);
+
+    module->last_error = "probe after restart";
+    if(!at_nearlink_probe(module))
+        return false;
+
+    /* Runtime service state may survive an MCU-only reset; normalize it again. */
+    module->last_error = "stop after restart";
+    if(!nearlink_quiesce(module))
+        return false;
 
     if(config->role == AT_NEARLINK_ROLE_SERVER)
     {
