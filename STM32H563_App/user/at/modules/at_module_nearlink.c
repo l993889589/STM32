@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "at_command_plan.h"
+
 #define NEARLINK_CMD_TIMEOUT_MS  3000U
 #define NEARLINK_CONNECT_TIMEOUT_MS  10000U
 #define NEARLINK_MAX_DATA        256U
@@ -169,6 +171,13 @@ bool at_nearlink_stop(at_nearlink_module_t *module)
 bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t *config)
 {
     char cmd[128];
+    char mode_command[32];
+    char address_command[64];
+    char name_command[64];
+    at_command_step_t configure_steps[3];
+    size_t configure_count = 0U;
+    size_t failed_step = 0U;
+
     if(!module || !module->session || !config || !config->local_name) return false;
 
     module->last_error = "probe";
@@ -184,30 +193,46 @@ bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t 
     if(!nearlink_quiesce(module))
         return false;
 
-    (void)snprintf(cmd, sizeof(cmd), "AT+SETMODE=%u", (unsigned int)config->role);
-    module->last_error = "set mode";
-    if(!nearlink_cmd(module, cmd)) return false;
+    (void)snprintf(mode_command, sizeof(mode_command),
+                   "AT+SETMODE=%u", (unsigned int)config->role);
+    configure_steps[configure_count++] = (at_command_step_t)
+        {"set mode", mode_command, "OK", NEARLINK_CMD_TIMEOUT_MS, 2U, AT_COMMAND_REQUIRED};
+
     if(config->local_address && config->local_address[0])
     {
-        (void)snprintf(cmd, sizeof(cmd), "AT+SETSLEADDR=%s", config->local_address);
-        module->last_error = "set address";
-        if(!nearlink_cmd(module, cmd)) return false;
+        (void)snprintf(address_command, sizeof(address_command),
+                       "AT+SETSLEADDR=%s", config->local_address);
+        configure_steps[configure_count++] = (at_command_step_t)
+            {"set address", address_command, "OK", NEARLINK_CMD_TIMEOUT_MS, 2U, AT_COMMAND_REQUIRED};
     }
 
     module->role = config->role;
     module->connected = 0U;
     if(config->role == AT_NEARLINK_ROLE_SERVER)
     {
-        (void)snprintf(cmd, sizeof(cmd), "AT+SSETNAME=%s", config->local_name);
-        module->last_error = "set server name";
-        if(!nearlink_cmd(module, cmd)) return false;
+        (void)snprintf(name_command, sizeof(name_command),
+                       "AT+SSETNAME=%s", config->local_name);
+        configure_steps[configure_count++] = (at_command_step_t)
+            {"set server name", name_command, "OK", NEARLINK_CMD_TIMEOUT_MS, 2U, AT_COMMAND_REQUIRED};
     }
     else
     {
         if(!config->peer_name || !config->peer_name[0]) return false;
-        (void)snprintf(cmd, sizeof(cmd), "AT+CSETNAME=%s", config->local_name);
-        module->last_error = "set client name";
-        if(!nearlink_cmd(module, cmd)) return false;
+        (void)snprintf(name_command, sizeof(name_command),
+                       "AT+CSETNAME=%s", config->local_name);
+        configure_steps[configure_count++] = (at_command_step_t)
+            {"set client name", name_command, "OK", NEARLINK_CMD_TIMEOUT_MS, 2U, AT_COMMAND_REQUIRED};
+    }
+
+    module->last_error = "configure";
+    if(!at_command_plan_run(module->session,
+                            configure_steps,
+                            configure_count,
+                            &failed_step))
+    {
+        if(failed_step < configure_count)
+            module->last_error = configure_steps[failed_step].name;
+        return false;
     }
 
     /* SSETNAME/CSETNAME only take effect after the module restarts. */
