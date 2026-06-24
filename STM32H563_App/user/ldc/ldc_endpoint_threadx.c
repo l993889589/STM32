@@ -147,15 +147,24 @@ uint16_t ldc_endpoint_packet_count(ldc_endpoint_t *endpoint)
     return ldc_packet_available(&endpoint->ldc);
 }
 
-UINT ldc_endpoint_wait(ldc_endpoint_t *endpoint, ULONG *actual_events)
+UINT ldc_endpoint_wait_for(ldc_endpoint_t *endpoint,
+                           uint32_t maximum_wait_ms,
+                           ULONG *actual_events)
 {
-    ULONG wait_ticks = TX_WAIT_FOREVER;
+    ULONG wait_ticks;
     ULONG events = 0U;
     uint32_t now_ms;
     UINT status;
 
     if(!endpoint || endpoint->initialized == 0U || !actual_events)
         return TX_PTR_ERROR;
+
+    if(maximum_wait_ms == 0U)
+        wait_ticks = TX_NO_WAIT;
+    else if(maximum_wait_ms == UINT32_MAX)
+        wait_ticks = TX_WAIT_FOREVER;
+    else
+        wait_ticks = endpoint_ms_to_ticks(maximum_wait_ms);
 
     now_ms = endpoint_now_ms();
     endpoint_account_time(endpoint, now_ms);
@@ -165,7 +174,10 @@ UINT ldc_endpoint_wait(ldc_endpoint_t *endpoint, ULONG *actual_events)
         uint32_t silence_ms = now_ms - endpoint->last_activity_ms;
         uint32_t remain_ms = (silence_ms >= endpoint->timeout_ms) ?
                              1U : endpoint->timeout_ms - silence_ms;
-        wait_ticks = endpoint_ms_to_ticks(remain_ms);
+        ULONG frame_ticks = endpoint_ms_to_ticks(remain_ms);
+
+        if(wait_ticks == TX_WAIT_FOREVER || frame_ticks < wait_ticks)
+            wait_ticks = frame_ticks;
     }
 
     status = tx_event_flags_get(&endpoint->events,
@@ -184,6 +196,16 @@ UINT ldc_endpoint_wait(ldc_endpoint_t *endpoint, ULONG *actual_events)
 
     *actual_events = events;
     return status;
+}
+
+UINT ldc_endpoint_wait(ldc_endpoint_t *endpoint, ULONG *actual_events)
+{
+    return ldc_endpoint_wait_for(endpoint, UINT32_MAX, actual_events);
+}
+
+UINT ldc_endpoint_poll(ldc_endpoint_t *endpoint, ULONG *actual_events)
+{
+    return ldc_endpoint_wait_for(endpoint, 0U, actual_events);
 }
 
 UINT ldc_endpoint_signal(ldc_endpoint_t *endpoint, ULONG events)

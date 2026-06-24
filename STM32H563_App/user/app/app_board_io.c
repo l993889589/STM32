@@ -41,11 +41,10 @@ static uint8_t g_rs485_uart_rx_buf[APP_RS485_UART_RX_BUF_SIZE];
 static modbus_t g_modbus_slave;
 static modbus_mapping_t g_modbus_mapping;
 static uint16_t g_holding_regs[APP_RS485_MODBUS_HOLDING_COUNT];
-static ldc_t g_w800_ldc;
+static ldc_endpoint_t g_w800_endpoint;
 static uint8_t g_w800_ldc_ring[APP_W800_RX_BUF_SIZE];
 static ldc_packet_t g_w800_packets[APP_W800_PACKET_COUNT];
 static ALIGN_32BYTES(uint8_t g_w800_uart_rx_buf[APP_W800_UART_RX_BUF_SIZE]);
-static volatile uint8_t g_w800_packet_pending;
 static at_session_t g_w800_at;
 static at_module_t g_w800_module;
 static uint16_t g_w800_local_port = APP_W800_LOCAL_PORT_START;
@@ -104,45 +103,6 @@ static uint32_t app_time_now_ms(void *arg)
     (void)arg;
     ticks = tx_time_get();
     return (uint32_t)((ticks * 1000ULL) / (uint64_t)TX_TIMER_TICKS_PER_SECOND);
-}
-
-static void app_sleep_ms(uint32_t ms, void *arg)
-{
-    ULONG ticks;
-
-    (void)arg;
-    ticks = (ULONG)(((uint64_t)ms * TX_TIMER_TICKS_PER_SECOND + 999ULL) / 1000ULL);
-    if(ticks == 0U)
-        ticks = 1U;
-
-    tx_thread_sleep(ticks);
-}
-
-static uint32_t app_ldc_irq_lock(void *arg)
-{
-    uint32_t primask;
-
-    (void)arg;
-    primask = __get_PRIMASK();
-    __disable_irq();
-
-    return primask;
-}
-
-static void app_ldc_irq_unlock(void *arg, uint32_t state)
-{
-    (void)arg;
-
-    if((state & 1U) == 0U)
-        __enable_irq();
-}
-
-static void app_w800_ldc_event_callback(void *arg, ldc_event_t evt)
-{
-    (void)arg;
-
-    if(evt == LDC_EVT_PACKET)
-        g_w800_packet_pending = 1U;
 }
 
 static void app_print_hex(const char *prefix, const uint8_t *data, uint32_t len)
@@ -630,18 +590,30 @@ static void app_w800_drain_ldc(void)
     uint8_t frame[256];
     int len;
 
-    while((len = ldc_read_packet(&g_w800_ldc, frame, sizeof(frame))) > 0)
+    while((len = ldc_endpoint_read(&g_w800_endpoint, frame, sizeof(frame))) > 0)
         at_session_input(&g_w800_at, frame, (uint32_t)len);
-
-    g_w800_packet_pending = (ldc_packet_available(&g_w800_ldc) > 0U) ? 1U : 0U;
 }
 
 static void app_w800_poll_at(void *arg)
 {
-    (void)arg;
-    ldc_tick(&g_w800_ldc, APP_W800_LDC_TICK_MS);
+    ULONG events;
 
-    if(g_w800_packet_pending || ldc_packet_available(&g_w800_ldc) > 0U)
+    (void)arg;
+    (void)ldc_endpoint_poll(&g_w800_endpoint, &events);
+
+    if((events & LDC_ENDPOINT_EVT_PACKET) != 0U ||
+       ldc_endpoint_packet_count(&g_w800_endpoint) > 0U)
+        app_w800_drain_ldc();
+}
+
+static void app_w800_wait_input(uint32_t ms, void *arg)
+{
+    ULONG events;
+
+    (void)arg;
+    (void)ldc_endpoint_wait_for(&g_w800_endpoint, ms, &events);
+    if((events & LDC_ENDPOINT_EVT_PACKET) != 0U ||
+       ldc_endpoint_packet_count(&g_w800_endpoint) > 0U)
         app_w800_drain_ldc();
 }
 
@@ -651,7 +623,7 @@ static void app_w800_uart_rx_callback(bsp_uart_port_t port, const uint8_t *data,
     (void)arg;
 
     if(data && len != 0U)
-        (void)ldc_write(&g_w800_ldc, data, len);
+        (void)ldc_endpoint_write(&g_w800_endpoint, data, len);
 }
 
 static bool app_w800_mqtt_connect(void)
@@ -710,7 +682,9 @@ static uint16_t app_w800_next_local_port(void)
 UINT app_board_io_init(void)
 {
     const app_ldc_port_config_t *rs485_ldc_config;
+    const app_ldc_port_config_t *w800_ldc_config;
     ldc_endpoint_config_t rs485_endpoint_config;
+    ldc_endpoint_config_t w800_endpoint_config;
 
     if(g_initialized)
         return TX_SUCCESS;
@@ -762,19 +736,28 @@ UINT app_board_io_init(void)
     (void)bsp_uart_register_rx_callback(BSP_UART_RS485, app_rs485_uart_rx_callback, NULL);
     (void)bsp_uart_start_rx(BSP_UART_RS485, g_rs485_uart_rx_buf, sizeof(g_rs485_uart_rx_buf));
 
-    ldc_init(&g_w800_ldc, g_w800_ldc_ring, sizeof(g_w800_ldc_ring), g_w800_packets, APP_W800_PACKET_COUNT);
-    ldc_set_lock(&g_w800_ldc, app_ldc_irq_lock, app_ldc_irq_unlock, NULL);
-    ldc_set_mode(&g_w800_ldc, LDC_MODE_OVERWRITE);
-    ldc_set_callback(&g_w800_ldc, app_w800_ldc_event_callback, NULL);
-    app_ldc_config_apply(&g_w800_ldc, APP_LDC_PORT_W800_AT);
-    g_w800_packet_pending = 0U;
+    w800_ldc_config = app_ldc_config_get(APP_LDC_PORT_W800_AT);
+    if(!w800_ldc_config)
+        return TX_PTR_ERROR;
+
+    w800_endpoint_config.name = w800_ldc_config->name;
+    w800_endpoint_config.ring_buffer = g_w800_ldc_ring;
+    w800_endpoint_config.ring_size = sizeof(g_w800_ldc_ring);
+    w800_endpoint_config.packet_pool = g_w800_packets;
+    w800_endpoint_config.packet_count = APP_W800_PACKET_COUNT;
+    w800_endpoint_config.max_frame = w800_ldc_config->max_frame;
+    w800_endpoint_config.timeout_ms = w800_ldc_config->timeout_ms;
+    w800_endpoint_config.delimiter = w800_ldc_config->delimiter;
+    w800_endpoint_config.mode = LDC_MODE_OVERWRITE;
+    if(ldc_endpoint_init(&g_w800_endpoint, &w800_endpoint_config) != TX_SUCCESS)
+        return TX_START_ERROR;
 
     at_session_init(&g_w800_at,
                     app_w800_at_tx,
                     NULL,
                     app_time_now_ms,
                     NULL,
-                    app_sleep_ms,
+                    app_w800_wait_input,
                     NULL);
     at_session_set_logger(&g_w800_at, app_w800_at_log, NULL);
     at_session_set_poll_callback(&g_w800_at, app_w800_poll_at, NULL);

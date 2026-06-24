@@ -48,6 +48,10 @@ bool ldc_endpoint_flush(ldc_endpoint_t *endpoint);
 int ldc_endpoint_read(ldc_endpoint_t *endpoint, uint8_t *buffer, uint32_t size);
 uint16_t ldc_endpoint_packet_count(ldc_endpoint_t *endpoint);
 UINT ldc_endpoint_wait(ldc_endpoint_t *endpoint, ULONG *actual_events);
+UINT ldc_endpoint_wait_for(ldc_endpoint_t *endpoint,
+                           uint32_t maximum_wait_ms,
+                           ULONG *actual_events);
+UINT ldc_endpoint_poll(ldc_endpoint_t *endpoint, ULONG *actual_events);
 UINT ldc_endpoint_signal(ldc_endpoint_t *endpoint, ULONG events);
 bool ldc_endpoint_get_stats(ldc_endpoint_t *endpoint, ldc_stats_t *stats);
 
