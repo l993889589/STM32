@@ -8,7 +8,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-set(LDC_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../STM32H563_App/user/ldc/core")
+set(LDC_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../shared/ldc")
 
 add_library(ldc_core STATIC
     "${LDC_ROOT}/ldc_core.c"
@@ -32,4 +32,3 @@ else()
 endif()
 
 add_test(NAME ldc_all COMMAND test_ldc)
-
