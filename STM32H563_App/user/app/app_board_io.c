@@ -201,8 +201,14 @@ static void app_log_token_line(const char *line)
 
 static void app_w800_at_log(const char *line, void *arg)
 {
+    char tagged[192];
+
     (void)arg;
-    app_log_token_line(line);
+    if(!line)
+        return;
+
+    (void)snprintf(tagged, sizeof(tagged), "[w800] %s", line);
+    app_log_token_line(tagged);
 }
 
 static uint16_t app_crc16_modbus(const uint8_t *data, uint32_t len)

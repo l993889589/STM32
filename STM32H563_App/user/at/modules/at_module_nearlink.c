@@ -91,11 +91,11 @@ static bool nearlink_cmd(at_nearlink_module_t *module, const char *cmd)
     return at_session_cmd_expect(module->session, cmd, "OK", NEARLINK_CMD_TIMEOUT_MS, 2U);
 }
 
-static bool nearlink_query_mode(at_nearlink_module_t *module, at_nearlink_role_t *role)
+static bool nearlink_query_mode(at_nearlink_module_t *module, int *mode)
 {
     const char *value;
 
-    if(!module || !module->session || !role)
+    if(!module || !module->session || !mode)
         return false;
 
     if(!at_session_cmd_expect(module->session, "AT+SETMODE?", "OK",
@@ -110,10 +110,12 @@ static bool nearlink_query_mode(at_nearlink_module_t *module, at_nearlink_role_t
     while(*value == ' ')
         value++;
 
-    if(*value == '0')
-        *role = AT_NEARLINK_ROLE_CLIENT;
+    if(strncmp(value, "-1", 2U) == 0)
+        *mode = -1;
+    else if(*value == '0')
+        *mode = AT_NEARLINK_ROLE_CLIENT;
     else if(*value == '1')
-        *role = AT_NEARLINK_ROLE_SERVER;
+        *mode = AT_NEARLINK_ROLE_SERVER;
     else
         return false;
 
@@ -122,12 +124,19 @@ static bool nearlink_query_mode(at_nearlink_module_t *module, at_nearlink_role_t
 
 static bool nearlink_quiesce(at_nearlink_module_t *module)
 {
-    at_nearlink_role_t role;
+    int mode;
 
-    if(!nearlink_query_mode(module, &role))
+    if(!nearlink_query_mode(module, &mode))
         return false;
 
-    if(role == AT_NEARLINK_ROLE_SERVER)
+    if(mode < 0)
+    {
+        module->active = 0U;
+        module->connected = 0U;
+        return true;
+    }
+
+    if(mode == AT_NEARLINK_ROLE_SERVER)
     {
         if(!at_session_cmd_expect(module->session, "AT+SSERVER?", "OK",
                                   NEARLINK_CMD_TIMEOUT_MS, 1U))
