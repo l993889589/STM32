@@ -12,6 +12,8 @@ typedef struct
     unsigned int packet;
     unsigned int overflow;
     unsigned int drop;
+    unsigned int callback_in_lock;
+    unsigned int lock_depth;
 } event_counts_t;
 
 typedef struct
@@ -38,12 +40,30 @@ static void on_event(void *arg, ldc_event_t event)
 {
     event_counts_t *counts = (event_counts_t *)arg;
 
+    if(counts->lock_depth != 0U)
+        counts->callback_in_lock++;
+
     if(event == LDC_EVT_PACKET)
         counts->packet++;
     else if(event == LDC_EVT_OVERFLOW)
         counts->overflow++;
     else if(event == LDC_EVT_DROP)
         counts->drop++;
+}
+
+static uint32_t test_lock(void *arg)
+{
+    event_counts_t *counts = (event_counts_t *)arg;
+    counts->lock_depth++;
+    return counts->lock_depth;
+}
+
+static void test_unlock(void *arg, uint32_t state)
+{
+    event_counts_t *counts = (event_counts_t *)arg;
+    (void)state;
+    CHECK(counts->lock_depth == 1U);
+    counts->lock_depth--;
 }
 
 static void fixture_init(fixture_t *fixture,
@@ -53,11 +73,11 @@ static void fixture_init(fixture_t *fixture,
                          ldc_mode_t mode)
 {
     memset(fixture, 0, sizeof(*fixture));
-    ldc_init(&fixture->ldc,
-             fixture->ring,
-             (uint32_t)sizeof(fixture->ring),
-             fixture->packets,
-             (uint16_t)ARRAY_SIZE(fixture->packets));
+    CHECK(ldc_init(&fixture->ldc,
+                   fixture->ring,
+                   (uint32_t)sizeof(fixture->ring),
+                   fixture->packets,
+                   (uint16_t)ARRAY_SIZE(fixture->packets)));
     ldc_set_frame_config(&fixture->ldc, max_len, timeout_ms, delimiter);
     ldc_set_mode(&fixture->ldc, mode);
     ldc_set_callback(&fixture->ldc, on_event, &fixture->events);
@@ -104,6 +124,23 @@ static void test_byte_and_block_equivalence(void)
         if(a > 0 && b == a)
             CHECK(memcmp(byte_frame, block_frame, (size_t)a) == 0);
     }
+}
+
+static void test_invalid_initialization_is_rejected(void)
+{
+    ldc_t ldc;
+    uint8_t ring[8];
+    ldc_packet_t packets[2];
+
+    CHECK(!ldc_init(NULL, ring, sizeof(ring), packets, 2U));
+    CHECK(!ldc_init(&ldc, NULL, sizeof(ring), packets, 2U));
+    CHECK(!ldc_init(&ldc, ring, 1U, packets, 2U));
+    CHECK(!ldc_init(&ldc, ring, sizeof(ring), NULL, 2U));
+    CHECK(!ldc_init(&ldc, ring, sizeof(ring), packets, 0U));
+    CHECK(ldc_packet_available(NULL) == 0U);
+    CHECK(ldc_write(NULL, ring, sizeof(ring)) == 0U);
+    CHECK(!ldc_putc(NULL, 0U));
+    CHECK(!ldc_flush(NULL));
 }
 
 static void test_delimiter_fixed_timeout_and_flush(void)
@@ -183,8 +220,9 @@ static void test_protect_and_overwrite(void)
     static const uint8_t a[] = "A\n";
     static const uint8_t b[] = "B\n";
     static const uint8_t c[] = "C\n";
+    static const uint8_t d[] = "D\n";
 
-    ldc_init(&ldc, ring, sizeof(ring), packets, 2U);
+    CHECK(ldc_init(&ldc, ring, sizeof(ring), packets, 2U));
     ldc_set_frame_config(&ldc, 8U, 0U, '\n');
     ldc_set_mode(&ldc, LDC_MODE_PROTECT);
     ldc_set_callback(&ldc, on_event, &events);
@@ -193,9 +231,13 @@ static void test_protect_and_overwrite(void)
     CHECK(ldc_write(&ldc, c, sizeof(c) - 1U) == sizeof(c) - 1U);
     CHECK(ldc_packet_available(&ldc) == 2U);
     CHECK(events.overflow >= 1U);
+    CHECK(read_packet(&ldc, a, sizeof(a) - 1U) != 0);
+    CHECK(read_packet(&ldc, b, sizeof(b) - 1U) != 0);
+    CHECK(ldc_write(&ldc, d, sizeof(d) - 1U) == sizeof(d) - 1U);
+    CHECK(read_packet(&ldc, d, sizeof(d) - 1U) != 0);
 
     memset(&events, 0, sizeof(events));
-    ldc_init(&ldc, ring, sizeof(ring), packets, 2U);
+    CHECK(ldc_init(&ldc, ring, sizeof(ring), packets, 2U));
     ldc_set_frame_config(&ldc, 8U, 0U, '\n');
     ldc_set_mode(&ldc, LDC_MODE_OVERWRITE);
     ldc_set_callback(&ldc, on_event, &events);
@@ -206,6 +248,19 @@ static void test_protect_and_overwrite(void)
     CHECK(events.drop == 1U);
     CHECK(read_packet(&ldc, b, sizeof(b) - 1U) != 0);
     CHECK(read_packet(&ldc, c, sizeof(c) - 1U) != 0);
+}
+
+static void test_callbacks_run_after_unlock(void)
+{
+    fixture_t fixture;
+    static const uint8_t line[] = "ready\n";
+
+    fixture_init(&fixture, 32U, 0U, '\n', LDC_MODE_PROTECT);
+    ldc_set_lock(&fixture.ldc, test_lock, test_unlock, &fixture.events);
+    CHECK(ldc_write(&fixture.ldc, line, sizeof(line) - 1U) == sizeof(line) - 1U);
+    CHECK(fixture.events.packet == 1U);
+    CHECK(fixture.events.callback_in_lock == 0U);
+    CHECK(fixture.events.lock_depth == 0U);
 }
 
 static uint32_t prng_next(uint32_t *state)
@@ -303,10 +358,12 @@ static void benchmark_block_write(void)
 int main(void)
 {
     test_byte_and_block_equivalence();
+    test_invalid_initialization_is_rejected();
     test_delimiter_fixed_timeout_and_flush();
     test_timeout_activity_and_large_elapsed();
     test_wrap_and_small_read_retry();
     test_protect_and_overwrite();
+    test_callbacks_run_after_unlock();
     test_random_chunk_invariance();
     benchmark_block_write();
 
