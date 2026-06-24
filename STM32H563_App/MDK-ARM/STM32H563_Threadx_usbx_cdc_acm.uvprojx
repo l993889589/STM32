@@ -847,6 +847,16 @@
               <FilePath>..\user\app\app_rs485.h</FilePath>
             </File>
             <File>
+              <FileName>app_w800.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\app\app_w800.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_w800.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\app\app_w800.h</FilePath>
+            </File>
+            <File>
               <FileName>app_shell.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\app\app_shell.c</FilePath>

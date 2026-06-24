@@ -12,15 +12,12 @@ __asm(".global __use_no_semihosting\n");
 #include "app_ldc_config.h"
 #include "app_nearlink.h"
 #include "app_rs485.h"
+#include "app_w800.h"
 #include "app_shell.h"
-#include "at_module.h"
-#include "at_module_w800.h"
-#include "at_session.h"
 #include "bsp.h"
 #include "ldc_core.h"
 #include "ldc/ldc_endpoint_threadx.h"
 #include "modbus.h"
-#include "mqtt_packet.h"
 #include "ota_layout.h"
 #include "usb_console.h"
 #include "usb_vendor_transport.h"
@@ -34,17 +31,6 @@ static bool g_initialized;
 static ldc_endpoint_t g_usb_endpoint;
 static uint8_t g_usb_ldc_ring[APP_USB_RX_BUF_SIZE + 1U];
 static ldc_packet_t g_usb_packets[APP_USB_PACKET_COUNT];
-
-static ldc_endpoint_t g_w800_endpoint;
-static uint8_t g_w800_ldc_ring[APP_W800_RX_BUF_SIZE];
-static ldc_packet_t g_w800_packets[APP_W800_PACKET_COUNT];
-static ALIGN_32BYTES(uint8_t g_w800_uart_rx_buf[APP_W800_UART_RX_BUF_SIZE]);
-static at_session_t g_w800_at;
-static at_module_t g_w800_module;
-static uint16_t g_w800_local_port = APP_W800_LOCAL_PORT_START;
-static volatile uint8_t g_w800_wifi_ready;
-static volatile uint8_t g_w800_mqtt_online;
-static volatile uint8_t g_w800_reconnect_requested;
 
 static uint8_t g_ota_stream_buf[APP_OTA_STREAM_BUF_SIZE];
 static uint32_t g_ota_stream_len;
@@ -80,25 +66,6 @@ static UINT app_ota_vendor_ack_write(const uint8_t *data, uint32_t len, void *ar
                                      len);
 }
 
-typedef enum
-{
-    APP_W800_STATE_RESET = 0,
-    APP_W800_STATE_WIFI_JOIN,
-    APP_W800_STATE_MQTT_SOCKET,
-    APP_W800_STATE_MQTT_CONNECT,
-    APP_W800_STATE_ONLINE,
-    APP_W800_STATE_MQTT_RETRY
-} app_w800_state_t;
-
-static uint32_t app_time_now_ms(void *arg)
-{
-    uint64_t ticks;
-
-    (void)arg;
-    ticks = tx_time_get();
-    return (uint32_t)((ticks * 1000ULL) / (uint64_t)TX_TIMER_TICKS_PER_SECOND);
-}
-
 static void app_print_hex(const char *prefix, const uint8_t *data, uint32_t len)
 {
     char line[96];
@@ -129,31 +96,6 @@ static void app_usb_log_line(const char *line)
 {
     if(line)
         (void)app_usb_cdc_write((const uint8_t *)line, (uint32_t)strlen(line));
-}
-
-static void app_log_token_line(const char *line)
-{
-    char out[192];
-    int used;
-
-    if(!line)
-        return;
-
-    used = snprintf(out, sizeof(out), "%s\r\n", line);
-    if(used > 0)
-        (void)app_usb_cdc_write((const uint8_t *)out, (uint32_t)used);
-}
-
-static void app_w800_at_log(const char *line, void *arg)
-{
-    char tagged[192];
-
-    (void)arg;
-    if(!line)
-        return;
-
-    (void)snprintf(tagged, sizeof(tagged), "[w800] %s", line);
-    app_log_token_line(tagged);
 }
 
 static uint16_t app_crc16_modbus(const uint8_t *data, uint32_t len)
@@ -534,116 +476,10 @@ static void app_usb_vendor_frame(const usb_vendor_frame_t *frame, void *arg)
     }
 }
 
-static int app_w800_at_tx(const uint8_t *data, uint16_t len, void *arg)
-{
-    (void)arg;
-
-    if(!data || len == 0U)
-        return -1;
-
-    return (bsp_uart_write(BSP_UART_W800_AT, data, len, APP_W800_TX_TIMEOUT_MS) == (int)len) ? 0 : -1;
-}
-
-static void app_w800_drain_ldc(void)
-{
-    uint8_t frame[256];
-    int len;
-
-    while((len = ldc_endpoint_read(&g_w800_endpoint, frame, sizeof(frame))) > 0)
-        at_session_input(&g_w800_at, frame, (uint32_t)len);
-}
-
-static void app_w800_poll_at(void *arg)
-{
-    ULONG events;
-
-    (void)arg;
-    (void)ldc_endpoint_poll(&g_w800_endpoint, &events);
-
-    if((events & LDC_ENDPOINT_EVT_PACKET) != 0U ||
-       ldc_endpoint_packet_count(&g_w800_endpoint) > 0U)
-        app_w800_drain_ldc();
-}
-
-static void app_w800_wait_input(uint32_t ms, void *arg)
-{
-    ULONG events;
-
-    (void)arg;
-    (void)ldc_endpoint_wait_for(&g_w800_endpoint, ms, &events);
-    if((events & LDC_ENDPOINT_EVT_PACKET) != 0U ||
-       ldc_endpoint_packet_count(&g_w800_endpoint) > 0U)
-        app_w800_drain_ldc();
-}
-
-static void app_w800_uart_rx_callback(bsp_uart_port_t port, const uint8_t *data, uint16_t len, void *arg)
-{
-    (void)port;
-    (void)arg;
-
-    if(data && len != 0U)
-        (void)ldc_endpoint_write(&g_w800_endpoint, data, len);
-}
-
-static bool app_w800_mqtt_connect(void)
-{
-    uint8_t packet[128];
-    uint16_t packet_len;
-
-    packet_len = mqtt_build_connect(packet,
-                                    sizeof(packet),
-                                    APP_W800_MQTT_CLIENT_ID,
-                                    APP_W800_MQTT_KEEPALIVE_S);
-
-    app_usb_log_line("w800 state: mqtt connect packet\r\n");
-    if(packet_len == 0U || !at_module_send_socket(&g_w800_module, packet, packet_len))
-        return false;
-
-    if(g_w800_module.socket_id >= 0)
-    {
-        char cmd[40];
-        (void)snprintf(cmd, sizeof(cmd), "AT+SKRCV=%d,4", g_w800_module.socket_id);
-        (void)at_session_cmd_expect(&g_w800_at, cmd, "+OK", 1000U, 1U);
-    }
-
-    return true;
-}
-
-static bool app_w800_mqtt_publish_status(const char *mode)
-{
-    uint8_t packet[256];
-    char payload[128];
-    uint16_t packet_len;
-
-    (void)snprintf(payload, sizeof(payload),
-                   "{\"deviceId\":\"%s\",\"online\":true,\"mode\":\"%s\",\"broker\":\"%s:%u\"}",
-                   APP_W800_MQTT_CLIENT_ID,
-                   mode ? mode : "boot",
-                   APP_W800_MQTT_HOST,
-                   (unsigned int)APP_W800_MQTT_PORT);
-
-    packet_len = mqtt_build_publish(packet, sizeof(packet), APP_W800_MQTT_STATUS_TOPIC, payload);
-
-    app_usb_log_line("w800 state: mqtt publish status\r\n");
-    return packet_len != 0U && at_module_send_socket(&g_w800_module, packet, packet_len);
-}
-
-static uint16_t app_w800_next_local_port(void)
-{
-    uint16_t port = g_w800_local_port++;
-
-    if(g_w800_local_port > APP_W800_LOCAL_PORT_END)
-        g_w800_local_port = APP_W800_LOCAL_PORT_START;
-
-    return port;
-}
-
 UINT app_board_io_init(void)
 {
     const app_ldc_port_config_t *usb_ldc_config;
-    const app_ldc_port_config_t *w800_ldc_config;
     ldc_endpoint_config_t usb_endpoint_config;
-    ldc_endpoint_config_t w800_endpoint_config;
 
     if(g_initialized)
         return TX_SUCCESS;
@@ -676,34 +512,8 @@ UINT app_board_io_init(void)
     if(app_rs485_init() != TX_SUCCESS)
         return TX_START_ERROR;
 
-    w800_ldc_config = app_ldc_config_get(APP_LDC_PORT_W800_AT);
-    if(!w800_ldc_config)
-        return TX_PTR_ERROR;
-
-    w800_endpoint_config.name = w800_ldc_config->name;
-    w800_endpoint_config.ring_buffer = g_w800_ldc_ring;
-    w800_endpoint_config.ring_size = sizeof(g_w800_ldc_ring);
-    w800_endpoint_config.packet_pool = g_w800_packets;
-    w800_endpoint_config.packet_count = APP_W800_PACKET_COUNT;
-    w800_endpoint_config.max_frame = w800_ldc_config->max_frame;
-    w800_endpoint_config.timeout_ms = w800_ldc_config->timeout_ms;
-    w800_endpoint_config.delimiter = w800_ldc_config->delimiter;
-    w800_endpoint_config.mode = LDC_MODE_OVERWRITE;
-    if(ldc_endpoint_init(&g_w800_endpoint, &w800_endpoint_config) != TX_SUCCESS)
+    if(app_w800_init() != TX_SUCCESS)
         return TX_START_ERROR;
-
-    at_session_init(&g_w800_at,
-                    app_w800_at_tx,
-                    NULL,
-                    app_time_now_ms,
-                    NULL,
-                    app_w800_wait_input,
-                    NULL);
-    at_session_set_logger(&g_w800_at, app_w800_at_log, NULL);
-    at_session_set_poll_callback(&g_w800_at, app_w800_poll_at, NULL);
-    at_module_init(&g_w800_module, &g_w800_at, &g_at_module_w800, NULL);
-    (void)bsp_uart_register_rx_callback(BSP_UART_W800_AT, app_w800_uart_rx_callback, NULL);
-    (void)bsp_uart_start_rx(BSP_UART_W800_AT, g_w800_uart_rx_buf, sizeof(g_w800_uart_rx_buf));
 
     if(app_nearlink_init() != TX_SUCCESS)
         return TX_START_ERROR;
@@ -795,144 +605,18 @@ void app_usb_cdc_service(void)
     app_shell_poll();
 }
 
-void app_w800_task_entry(ULONG thread_input)
-{
-    app_w800_state_t state = APP_W800_STATE_RESET;
-    bool wifi_ready = false;
-    bool spi_nor_logged = false;
-    const at_wifi_config_t wifi_cfg =
-    {
-        APP_W800_WIFI_SSID,
-        APP_W800_WIFI_PASSWORD
-    };
-
-    (void)thread_input;
-
-    for(;;)
-    {
-        g_w800_wifi_ready = wifi_ready ? 1U : 0U;
-        g_w800_mqtt_online = (state == APP_W800_STATE_ONLINE) ? 1U : 0U;
-
-        if(g_w800_reconnect_requested != 0U)
-        {
-            g_w800_reconnect_requested = 0U;
-            state = wifi_ready ? APP_W800_STATE_MQTT_RETRY : APP_W800_STATE_WIFI_JOIN;
-            g_w800_mqtt_online = 0U;
-        }
-
-        if(!spi_nor_logged && usb_console_is_connected())
-        {
-            bsp_spi_nor_log_id(app_usb_log_line);
-            spi_nor_logged = true;
-        }
-
-        switch(state)
-        {
-        case APP_W800_STATE_RESET:
-            (void)at_module_close_socket(&g_w800_module);
-            (void)at_module_reset(&g_w800_module);
-            wifi_ready = false;
-            state = APP_W800_STATE_WIFI_JOIN;
-            break;
-
-        case APP_W800_STATE_WIFI_JOIN:
-            if(wifi_ready || at_module_connect_network(&g_w800_module, &wifi_cfg))
-            {
-                wifi_ready = true;
-                app_usb_log_line("w800 state: wifi ready\r\n");
-                state = APP_W800_STATE_MQTT_SOCKET;
-            }
-            else
-            {
-                app_usb_log_line("w800 error: wifi join failed\r\n");
-                tx_thread_sleep(3000U);
-                state = APP_W800_STATE_RESET;
-            }
-            break;
-
-        case APP_W800_STATE_MQTT_SOCKET:
-            (void)at_module_close_socket(&g_w800_module);
-            {
-                const at_socket_config_t socket_cfg =
-                {
-                    APP_W800_MQTT_HOST,
-                    APP_W800_MQTT_PORT,
-                    app_w800_next_local_port()
-                };
-
-                if(at_module_open_socket(&g_w800_module, &socket_cfg))
-                    state = APP_W800_STATE_MQTT_CONNECT;
-                else
-                {
-                    app_usb_log_line("w800 error: tcp socket failed\r\n");
-                    tx_thread_sleep(3000U);
-                    state = APP_W800_STATE_MQTT_RETRY;
-                }
-            }
-            break;
-
-        case APP_W800_STATE_MQTT_CONNECT:
-            if(app_w800_mqtt_connect())
-            {
-                if(app_w800_mqtt_publish_status("online"))
-                    app_usb_log_line("w800 state: mqtt online\r\n");
-                else
-                    app_usb_log_line("w800 warn: mqtt status publish failed\r\n");
-
-                state = APP_W800_STATE_ONLINE;
-            }
-            else
-            {
-                app_usb_log_line("w800 error: mqtt connect send failed\r\n");
-                tx_thread_sleep(3000U);
-                state = APP_W800_STATE_MQTT_RETRY;
-            }
-            break;
-
-        case APP_W800_STATE_ONLINE:
-            app_w800_poll_at(NULL);
-            tx_thread_sleep(1000U);
-            if(!app_w800_mqtt_publish_status("heartbeat"))
-            {
-                app_usb_log_line("w800 warn: mqtt heartbeat failed, reconnect\r\n");
-                state = APP_W800_STATE_MQTT_RETRY;
-            }
-            break;
-
-        case APP_W800_STATE_MQTT_RETRY:
-            (void)at_module_close_socket(&g_w800_module);
-            if(at_module_is_network_ready(&g_w800_module))
-            {
-                wifi_ready = true;
-                app_usb_log_line("w800 state: mqtt retry keep wifi\r\n");
-                tx_thread_sleep(1000U);
-                state = APP_W800_STATE_MQTT_SOCKET;
-            }
-            else
-            {
-                wifi_ready = false;
-                app_usb_log_line("w800 warn: wifi lost, rejoin\r\n");
-                tx_thread_sleep(1000U);
-                state = APP_W800_STATE_WIFI_JOIN;
-            }
-            break;
-
-        default:
-            state = APP_W800_STATE_RESET;
-            break;
-        }
-    }
-}
-
 void app_board_get_status(app_board_status_t *status)
 {
+    app_w800_status_t w800;
+
     if(status == NULL)
         return;
 
-    status->wifi_ready = g_w800_wifi_ready;
-    status->mqtt_online = g_w800_mqtt_online;
+    app_w800_get_status(&w800);
+    status->wifi_ready = w800.wifi_ready;
+    status->mqtt_online = w800.mqtt_online;
     status->ota_active = g_ota_active;
-    status->w800_socket_id = g_w800_module.socket_id;
+    status->w800_socket_id = w800.socket_id;
     status->ota_received = g_ota_received_size;
     status->ota_expected = g_ota_expected_size;
     status->vendor_connected = usb_vendor_transport_is_connected() ? 1U : 0U;
@@ -945,7 +629,7 @@ void app_board_get_status(app_board_status_t *status)
 
 void app_board_request_mqtt_reconnect(void)
 {
-    g_w800_reconnect_requested = 1U;
+    app_w800_request_reconnect();
 }
 
 void app_led_task_entry(ULONG thread_input)
