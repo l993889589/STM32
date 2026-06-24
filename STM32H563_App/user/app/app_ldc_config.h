@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#include "ldc_core.h"
-
 typedef enum
 {
     APP_LDC_PORT_USB_CDC = 0,
@@ -32,6 +30,5 @@ typedef struct
 } app_ldc_port_config_t;
 
 const app_ldc_port_config_t *app_ldc_config_get(app_ldc_port_id_t id);
-void app_ldc_config_apply(ldc_t *ldc, app_ldc_port_id_t id);
 
 #endif /* APP_LDC_CONFIG_H */

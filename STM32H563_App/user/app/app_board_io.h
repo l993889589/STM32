@@ -7,6 +7,7 @@
 #include "ux_api.h"
 #include "ux_device_class_cdc_acm.h"
 #include "modbus.h"
+#include "ldc_core.h"
 
 typedef struct
 {
@@ -22,6 +23,9 @@ typedef struct
     uint32_t vendor_length_errors;
     uint32_t vendor_discarded_bytes;
     modbus_stats_t modbus;
+    ldc_stats_t usb_ldc;
+    ldc_stats_t rs485_ldc;
+    ldc_stats_t w800_ldc;
 } app_board_status_t;
 
 UINT app_board_io_init(void);

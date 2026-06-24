@@ -4,6 +4,10 @@
 
 #include "app_config.h"
 
+/*
+ * Framing policy table only. Transport ownership, buffers, ThreadX events and
+ * protocol consumers belong to the corresponding application service.
+ */
 static const app_ldc_port_config_t g_ldc_ports[APP_LDC_PORT_COUNT] =
 {
     {
@@ -21,7 +25,7 @@ static const app_ldc_port_config_t g_ldc_ports[APP_LDC_PORT_COUNT] =
         APP_LDC_LINK_UART,
         APP_RS485_UART_BAUDRATE,
         APP_RS485_LDC_MAX_FRAME,
-        2U,
+        APP_RS485_FRAME_GAP_MS,
         -1
     },
     {
@@ -50,14 +54,4 @@ const app_ldc_port_config_t *app_ldc_config_get(app_ldc_port_id_t id)
         return NULL;
 
     return &g_ldc_ports[id];
-}
-
-void app_ldc_config_apply(ldc_t *ldc, app_ldc_port_id_t id)
-{
-    const app_ldc_port_config_t *cfg = app_ldc_config_get(id);
-
-    if(!ldc || !cfg)
-        return;
-
-    ldc_set_frame_config(ldc, cfg->max_frame, cfg->timeout_ms, cfg->delimiter);
 }

@@ -604,6 +604,7 @@ void app_usb_service_get_status(app_usb_service_status_t *status)
                                           &status->vendor_crc_errors,
                                           &status->vendor_length_errors,
                                           &status->vendor_discarded_bytes);
+    (void)ldc_endpoint_get_stats(&g_usb_endpoint, &status->ldc);
 }
 
 int fputc(int ch, FILE *f)

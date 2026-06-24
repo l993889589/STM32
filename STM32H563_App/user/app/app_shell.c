@@ -19,15 +19,28 @@ static shell_t g_app_shell;
 static uint8_t g_app_shell_banner_pending;
 
 static const char g_app_shell_banner[] =
-    "\r\n\033[36m"
-    " _          _       ___  \r\n"
-    "| |    ___ | | ___ / _ \\ \r\n"
-    "| |   / _ \\| |/ /| | | |\r\n"
-    "| |__|  __/  < | |_| |\r\n"
-    "|_____\\___|_|\\_\\ \\___/ \r\n"
+    "\r\n\033[1;36m"
+    "====================================================\r\n"
+    "        ____  _                 ____  _   _         \r\n"
+    "       / ___|| |_ _ __ ___     | __ )| | | |        \r\n"
+    "       \\___ \\| __| '_ ` _ \\    |  _ \\| | | |        \r\n"
+    "        ___) | |_| | | | | |   | |_) | |_| |        \r\n"
+    "       |____/ \\__|_| |_| |_|   |____/ \\___/         \r\n"
+    "                                                    \r\n"
+    "     STM32H563 Industrial Embedded System          \r\n"
+    "====================================================\r\n"
     "\033[0m"
-    "LeduO STM32H563 App " APP_FIRMWARE_VERSION "\r\n"
-    "Type 'help' for commands.\r\n\r\n";
+    "\033[1;33m"
+    " MCU     : STM32H563\r\n"
+    " FW      : LeduO Firmware " APP_FIRMWARE_VERSION "\r\n"
+    " ARCH    : BSP / LDC / AT / RTOS\r\n"
+    " MODE    : DMA + Event Driven\r\n"
+    "\033[0m"
+    "\033[1;32m"
+    " STATUS  : System Initializing...\r\n"
+    "\033[0m"
+    "\r\nType 'help' for CLI commands.\r\n"
+    "====================================================\r\n\r\n";
 
 static int app_shell_write(const uint8_t *data, uint16_t length, void *arg)
 {
@@ -83,6 +96,24 @@ static int app_shell_cmd_clear(shell_t *shell, int argc, char **argv, void *arg)
     return 0;
 }
 
+static void app_shell_print_ldc(shell_t *shell,
+                                const char *name,
+                                const ldc_stats_t *stats)
+{
+    if(!shell || !name || !stats)
+        return;
+
+    (void)shell_printf(shell,
+                       "%s ldc rx=%llu packets=%llu overflow=%llu drop=%llu peak=%llu queue_peak=%llu\r\n",
+                       name,
+                       (unsigned long long)stats->rx_bytes,
+                       (unsigned long long)stats->packets,
+                       (unsigned long long)stats->overflow,
+                       (unsigned long long)stats->drop,
+                       (unsigned long long)stats->max_used,
+                       (unsigned long long)stats->packet_peak);
+}
+
 static int app_shell_cmd_modbus(shell_t *shell, int argc, char **argv, void *arg)
 {
     app_board_status_t status;
@@ -104,6 +135,7 @@ static int app_shell_cmd_modbus(shell_t *shell, int argc, char **argv, void *arg
                        (unsigned long)status.modbus.crc_errors,
                        (unsigned long)status.modbus.exceptions,
                        (unsigned long)status.modbus.transport_errors);
+    app_shell_print_ldc(shell, "rs485", &status.rs485_ldc);
     return 0;
 }
 
@@ -122,6 +154,7 @@ static int app_shell_cmd_wifi(shell_t *shell, int argc, char **argv, void *arg)
     (void)shell_printf(shell, "wifi %s, ssid=%s\r\n",
                        status.wifi_ready ? "ready" : "offline",
                        APP_W800_WIFI_SSID);
+    app_shell_print_ldc(shell, "w800", &status.w800_ldc);
     return 0;
 }
 
@@ -189,6 +222,7 @@ static int app_shell_cmd_usb(shell_t *shell, int argc, char **argv, void *arg)
                        (unsigned long)status.vendor_crc_errors,
                        (unsigned long)status.vendor_length_errors,
                        (unsigned long)status.vendor_discarded_bytes);
+    app_shell_print_ldc(shell, "usb", &status.usb_ldc);
     return 0;
 }
 
@@ -200,11 +234,18 @@ static int app_shell_cmd_nearlink(shell_t *shell, int argc, char **argv, void *a
     if(argc == 2 && strcmp(argv[1], "status") == 0)
     {
         app_nearlink_get_status(&status);
-        (void)shell_printf(shell, "nearlink role=%s active=%u connected=%u pending=%u local=%s peer=%s last=%s\r\n",
+        (void)shell_printf(shell,
+                           "nearlink role=%s active=%u connected=%u pending=%u reset=%u local=%s peer=%s last=%s\r\n",
                            status.role == AT_NEARLINK_ROLE_SERVER ? "server" : "client",
-                           status.active, status.connected, status.apply_pending,
+                           status.active, status.connected, status.apply_pending, status.reset_pin,
                            status.local_name, status.peer_name,
                            status.last_error ? status.last_error : "none");
+        (void)shell_printf(shell,
+                           "nearlink diag uart_rx=%lu events=%lu ldc_rx=%lu packets=%lu\r\n",
+                           (unsigned long)status.uart_rx_bytes,
+                           (unsigned long)status.uart_rx_events,
+                           (unsigned long)status.ldc_rx_bytes,
+                           (unsigned long)status.ldc_packets);
         return 0;
     }
     if(argc >= 3 && strcmp(argv[1], "role") == 0)

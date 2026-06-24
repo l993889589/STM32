@@ -10,6 +10,7 @@
 #define APP_RS485_MODBUS_UNIT_ID           1U
 #define APP_RS485_MODBUS_HOLDING_COUNT     64U
 #define APP_RS485_UART_BAUDRATE            115200U
+#define APP_RS485_FRAME_GAP_MS              ((38500U + APP_RS485_UART_BAUDRATE - 1U) / APP_RS485_UART_BAUDRATE)
 #define APP_W800_UART_BAUDRATE             115200U
 #define APP_NEARLINK_UART_BAUDRATE          115200U
 #define APP_NEARLINK_BOOT_WAIT_MS           5000U
@@ -33,12 +34,10 @@
 #define APP_RS485_RX_BUF_SIZE              256U
 #define APP_RS485_UART_RX_BUF_SIZE         256U
 #define APP_RS485_PACKET_COUNT             8U
-#define APP_RS485_LDC_TICK_MS              1U
 #define APP_RS485_TX_TIMEOUT_MS            100U
 #define APP_W800_RX_BUF_SIZE               1024U
 #define APP_W800_UART_RX_BUF_SIZE          256U
 #define APP_W800_PACKET_COUNT              16U
-#define APP_W800_LDC_TICK_MS               1U
 #define APP_W800_TX_TIMEOUT_MS             1000U
 #define APP_W800_CMD_TIMEOUT_MS            3000U
 #define APP_W800_JOIN_TIMEOUT_MS           45000U

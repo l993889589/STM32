@@ -140,3 +140,8 @@ void app_rs485_get_stats(modbus_stats_t *stats)
     if(stats)
         modbus_get_stats(&g_modbus_slave, stats);
 }
+
+bool app_rs485_get_ldc_stats(ldc_stats_t *stats)
+{
+    return ldc_endpoint_get_stats(&g_endpoint, stats);
+}

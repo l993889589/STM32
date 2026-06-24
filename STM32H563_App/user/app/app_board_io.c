@@ -48,7 +48,10 @@ void app_board_get_status(app_board_status_t *status)
     status->vendor_crc_errors = usb.vendor_crc_errors;
     status->vendor_length_errors = usb.vendor_length_errors;
     status->vendor_discarded_bytes = usb.vendor_discarded_bytes;
+    status->usb_ldc = usb.ldc;
+    status->w800_ldc = w800.ldc;
     app_rs485_get_stats(&status->modbus);
+    (void)app_rs485_get_ldc_stats(&status->rs485_ldc);
 }
 
 void app_board_request_mqtt_reconnect(void)

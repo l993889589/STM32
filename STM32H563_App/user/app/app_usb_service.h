@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "tx_api.h"
+#include "ldc_core.h"
 
 typedef struct
 {
@@ -15,6 +16,7 @@ typedef struct
     uint32_t vendor_crc_errors;
     uint32_t vendor_length_errors;
     uint32_t vendor_discarded_bytes;
+    ldc_stats_t ldc;
 } app_usb_service_status_t;
 
 UINT app_usb_service_init(void);

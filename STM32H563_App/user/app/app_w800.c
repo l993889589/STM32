@@ -356,6 +356,7 @@ void app_w800_get_status(app_w800_status_t *status)
     status->wifi_ready = g_wifi_ready;
     status->mqtt_online = g_mqtt_online;
     status->socket_id = g_module.socket_id;
+    (void)ldc_endpoint_get_stats(&g_endpoint, &status->ldc);
 }
 
 void app_w800_request_reconnect(void)
