@@ -27,5 +27,8 @@ function Invoke-TestSuite {
 
 Invoke-TestSuite -Name "ldc" -Source (Join-Path $Root "tests\ldc")
 Invoke-TestSuite -Name "at" -Source (Join-Path $Root "tests\at")
+Invoke-TestSuite -Name "modbus" -Source (Join-Path $Root "STM32H563_App\user\libmodbus\tests")
+Invoke-TestSuite -Name "usb" -Source (Join-Path $Root "STM32H563_App\user\usb\tests")
+Invoke-TestSuite -Name "shell" -Source (Join-Path $Root "shared\shell\tests")
 
 Write-Host "All host communication tests passed."
