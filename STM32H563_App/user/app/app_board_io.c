@@ -30,8 +30,8 @@ __asm(".global __use_no_semihosting\n");
 
 static bool g_initialized;
 
-static ldc_t g_usb_ldc;
-static uint8_t g_usb_ldc_ring[APP_USB_RX_BUF_SIZE];
+static ldc_endpoint_t g_usb_endpoint;
+static uint8_t g_usb_ldc_ring[APP_USB_RX_BUF_SIZE + 1U];
 static ldc_packet_t g_usb_packets[APP_USB_PACKET_COUNT];
 
 static ldc_endpoint_t g_rs485_endpoint;
@@ -427,7 +427,7 @@ static void app_usb_drain_ldc(void)
     uint8_t frame[APP_USB_LDC_MAX_FRAME];
     int len;
 
-    while((len = ldc_read_packet(&g_usb_ldc, frame, sizeof(frame))) > 0)
+    while((len = ldc_endpoint_read(&g_usb_endpoint, frame, sizeof(frame))) > 0)
     {
         static const char prefix[] = "usb rx";
 
@@ -682,8 +682,10 @@ static uint16_t app_w800_next_local_port(void)
 UINT app_board_io_init(void)
 {
     const app_ldc_port_config_t *rs485_ldc_config;
+    const app_ldc_port_config_t *usb_ldc_config;
     const app_ldc_port_config_t *w800_ldc_config;
     ldc_endpoint_config_t rs485_endpoint_config;
+    ldc_endpoint_config_t usb_endpoint_config;
     ldc_endpoint_config_t w800_endpoint_config;
 
     if(g_initialized)
@@ -698,9 +700,21 @@ UINT app_board_io_init(void)
     if(app_shell_init() != 0)
         return TX_PTR_ERROR;
 
-    ldc_init(&g_usb_ldc, g_usb_ldc_ring, sizeof(g_usb_ldc_ring), g_usb_packets, APP_USB_PACKET_COUNT);
-    ldc_set_mode(&g_usb_ldc, LDC_MODE_OVERWRITE);
-    app_ldc_config_apply(&g_usb_ldc, APP_LDC_PORT_USB_CDC);
+    usb_ldc_config = app_ldc_config_get(APP_LDC_PORT_USB_CDC);
+    if(!usb_ldc_config)
+        return TX_PTR_ERROR;
+
+    usb_endpoint_config.name = usb_ldc_config->name;
+    usb_endpoint_config.ring_buffer = g_usb_ldc_ring;
+    usb_endpoint_config.ring_size = sizeof(g_usb_ldc_ring);
+    usb_endpoint_config.packet_pool = g_usb_packets;
+    usb_endpoint_config.packet_count = APP_USB_PACKET_COUNT;
+    usb_endpoint_config.max_frame = usb_ldc_config->max_frame;
+    usb_endpoint_config.timeout_ms = usb_ldc_config->timeout_ms;
+    usb_endpoint_config.delimiter = usb_ldc_config->delimiter;
+    usb_endpoint_config.mode = LDC_MODE_OVERWRITE;
+    if(ldc_endpoint_init(&g_usb_endpoint, &usb_endpoint_config) != TX_SUCCESS)
+        return TX_START_ERROR;
 
     rs485_ldc_config = app_ldc_config_get(APP_LDC_PORT_RS485);
     if(!rs485_ldc_config)
@@ -841,9 +855,13 @@ void app_usb_cdc_process_rx(const uint8_t *data, uint32_t len)
         return;
     }
 
-    (void)ldc_write(&g_usb_ldc, data, len);
-    (void)ldc_flush(&g_usb_ldc);
+    (void)ldc_endpoint_write(&g_usb_endpoint, data, len);
+    (void)ldc_endpoint_flush(&g_usb_endpoint);
     app_usb_drain_ldc();
+    {
+        ULONG events;
+        (void)ldc_endpoint_poll(&g_usb_endpoint, &events);
+    }
 }
 
 void app_usb_cdc_service(void)
