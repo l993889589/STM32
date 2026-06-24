@@ -26,3 +26,27 @@
   4. 后续优化：状态输出避免在小栈线程里集中使用 `%llu`，必要时拆成轻量格式化函数。
   5. 后续优化：开启 ThreadX stack checking 或增加 fault 现场记录，便于确认栈溢出和 fault 类型。
 - 当前状态：已定位，尚未修复。
+
+## ISSUE-002：LDC 上层存在任务/依赖膨胀风险
+
+- 发现时间：2026-06-24
+- 现象/背景：
+  - 当前 LDC core 本身是轻量的帧化接收内核，负责字节/块输入、ring buffer、packet descriptor FIFO、分帧和事件通知。
+  - 但是上层每增加一个外设，容易继续复制出一套 `endpoint + task + parser/session + 状态机 + 直接日志输出`。
+  - 如果未来继续按点对点方式扩展，容易出现“外设多了以后队列爆炸、任务爆炸、依赖关系乱、debug 困难”的架构风险。
+- 初步结论：
+  - 不建议改 LDC。LDC 应保持为 RTOS-free 的轻量链路接收内核。
+  - 建议在 LDC 之上新增系统 Message Bus / Event Bus 层，用中央调度和 handler 表把上层依赖收束起来。
+- 证据：
+  - `shared/ldc/ldc_core.*` 只包含 ring、packet queue、callback、统计和锁注入，没有业务路由职责。
+  - `user/ldc/ldc_endpoint_threadx.*` 已经把 LDC 事件转换为 ThreadX event flags。
+  - `app_rs485.c`、`app_w800.c`、`app_nearlink.c`、`app_usb_service.c` 各自持有 endpoint、缓冲区、协议消费和状态机。
+  - 多个服务模块直接调用 `app_usb_cdc_write()` 输出日志，日志链路和业务链路耦合。
+- 建议方向：
+  1. 保留 LDC 作为每条物理链路的 ingress/framing 层。
+  2. 新增 `app_msg_bus`，使用固定大小消息、静态队列、静态 handler 表，不使用动态内存。
+  3. UART/USB/LDC 只发布 `LINK_FRAME`、`LINK_OVERFLOW`、`LINK_DROP`、`CONTROL` 等消息。
+  4. Modbus、AT、Shell、Log、OTA 等都改成 handler/subscriber，新增外设主要新增 handler 和配置表。
+  5. 建立规则：bus handler 不能长时间阻塞；耗时动作拆成异步状态机或 worker job。
+  6. 日志统一走 `LOG` 消息，由低优先级 log handler 输出，避免各模块直接写 CDC。
+- 当前状态：已识别为架构风险，尚未实施 Message Bus。
