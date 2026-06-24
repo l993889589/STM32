@@ -1157,6 +1157,16 @@
           <GroupName>Application/AT/Core</GroupName>
           <Files>
             <File>
+              <FileName>at_command_plan.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\at\core\at_command_plan.c</FilePath>
+            </File>
+            <File>
+              <FileName>at_command_plan.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\at\core\at_command_plan.h</FilePath>
+            </File>
+            <File>
               <FileName>at_core.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\at\core\at_core.c</FilePath>
