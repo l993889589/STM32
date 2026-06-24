@@ -224,6 +224,12 @@ bool at_nearlink_apply(at_nearlink_module_t *module, const at_nearlink_config_t 
     if(!nearlink_quiesce(module))
         return false;
 
+    /* SETMODE is runtime state and returns to -1 after a module restart. */
+    (void)snprintf(cmd, sizeof(cmd), "AT+SETMODE=%u", (unsigned int)config->role);
+    module->last_error = "restore mode after restart";
+    if(!nearlink_cmd(module, cmd))
+        return false;
+
     if(config->role == AT_NEARLINK_ROLE_SERVER)
     {
         if(config->auth_type != 0U && config->key && config->key[0])
