@@ -22,5 +22,6 @@ int bsp_uart_start_rx(bsp_uart_port_t port, uint8_t *buf, uint16_t len);
 int bsp_uart_write(bsp_uart_port_t port, const uint8_t *data, uint16_t len, uint32_t timeout_ms);
 int bsp_uart_write_wait_complete(bsp_uart_port_t port, const uint8_t *data, uint16_t len, uint32_t timeout_ms);
 UART_HandleTypeDef *bsp_uart_handle(bsp_uart_port_t port);
+uint32_t bsp_uart_rx_events(bsp_uart_port_t port);
 
 #endif /* BSP_UART_H */

@@ -13,6 +13,7 @@ typedef struct
     uint16_t rx_size;
     bsp_uart_rx_cb_t rx_cb;
     void *rx_arg;
+    uint32_t rx_events;
 } bsp_uart_desc_t;
 
 static bsp_uart_desc_t g_uart_desc[BSP_UART_COUNT] =
@@ -88,7 +89,15 @@ void bsp_uart_init(void)
         g_uart_desc[i].rx_size = 0U;
         g_uart_desc[i].rx_cb = NULL;
         g_uart_desc[i].rx_arg = NULL;
+        g_uart_desc[i].rx_events = 0U;
     }
+}
+
+uint32_t bsp_uart_rx_events(bsp_uart_port_t port)
+{
+    bsp_uart_desc_t *desc = bsp_uart_get_desc(port);
+
+    return desc ? desc->rx_events : 0U;
 }
 
 int bsp_uart_register_rx_callback(bsp_uart_port_t port, bsp_uart_rx_cb_t cb, void *arg)
@@ -160,6 +169,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 
     if(size > desc->rx_size)
         size = desc->rx_size;
+
+    desc->rx_events++;
 
     if(size != 0U && desc->rx_buf)
     {
