@@ -202,12 +202,14 @@ uint32_t ldc_write(ldc_t *ldc, const uint8_t *data, uint32_t len)
 
     state = ldc_enter(ldc);
 
-    for(uint32_t i = 0U; i < len; i++)
+    while(written < len)
     {
-        uint8_t ch = data[i];
+        uint32_t chunk;
+        uint32_t free_space;
+        const uint8_t *delimiter;
 
         /* Keep one byte empty in the ring so head == tail can mean empty. */
-        while(ldc_ring_free(&ldc->ring) == 0U)
+        while((free_space = ldc_ring_free(&ldc->ring)) == 0U)
         {
             if(ldc->mode != LDC_MODE_OVERWRITE || !ldc_drop_oldest_packet(ldc, &events))
             {
@@ -222,17 +224,46 @@ uint32_t ldc_write(ldc_t *ldc, const uint8_t *data, uint32_t len)
         if(ldc->frame_len == 0U)
             ldc->frame_start = ldc->ring.head;
 
-        if(ldc_ring_write(&ldc->ring, &ch, 1U) != 1U)
+        chunk = len - written;
+        if(chunk > free_space)
+            chunk = free_space;
+
+        if(ldc->max_len != 0U)
+        {
+            uint32_t frame_room = (ldc->frame_len < ldc->max_len) ?
+                                  ldc->max_len - ldc->frame_len : 0U;
+
+            if(frame_room == 0U)
+            {
+                (void)ldc_commit_frame_unlocked(ldc, &events);
+                continue;
+            }
+            if(chunk > frame_room)
+                chunk = frame_room;
+        }
+
+        delimiter = NULL;
+        if(ldc->delimiter >= 0)
+        {
+            delimiter = (const uint8_t *)memchr(data + written,
+                                                (uint8_t)ldc->delimiter,
+                                                chunk);
+            if(delimiter)
+                chunk = (uint32_t)(delimiter - (data + written)) + 1U;
+        }
+
+        chunk = ldc_ring_write(&ldc->ring, data + written, chunk);
+        if(chunk == 0U)
             break;
 
-        written++;
-        ldc->stats.rx_bytes++;
-        ldc->frame_len++;
+        written += chunk;
+        ldc->stats.rx_bytes += chunk;
+        ldc->frame_len += chunk;
         ldc->frame_timer = 0U;
         ldc_refresh_usage(ldc);
 
         /* Three supported frame-ending strategies: delimiter, fixed max length, or timeout via ldc_tick. */
-        if(ldc->delimiter >= 0 && ch == (uint8_t)ldc->delimiter)
+        if(delimiter != NULL)
         {
             (void)ldc_commit_frame_unlocked(ldc, &events);
         }

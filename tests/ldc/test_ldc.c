@@ -329,7 +329,7 @@ static void benchmark_block_write(void)
     fixture_t fixture;
     uint8_t block[256];
     uint8_t frame[256];
-    const unsigned int loops = 20000U;
+    const unsigned int loops = 200000U;
     clock_t start;
     clock_t stop;
     double seconds;
