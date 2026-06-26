@@ -8,6 +8,12 @@
 #define APP_MSG_ANY_SOURCE      0xFFFFU
 #define APP_MSG_ANY_TYPE        0xFFFFU
 
+#define APP_MSG_FLAG_NONE       0x0000U
+#define APP_MSG_FLAG_HIGH       0x0001U
+#define APP_MSG_FLAG_ISR        0x0002U
+#define APP_MSG_FLAG_DMA        0x0004U
+#define APP_MSG_FLAG_URGENT     0x0008U
+
 typedef enum
 {
     APP_MSG_SOURCE_SYSTEM = 0,
@@ -39,14 +45,23 @@ typedef enum
     APP_MSG_PRIORITY_HIGH
 } app_msg_priority_t;
 
+typedef enum
+{
+    APP_MSG_DROP_NEWEST = 0,
+    APP_MSG_DROP_OLDEST,
+    APP_MSG_FORCE_HIGH_PRIORITY
+} app_msg_full_policy_t;
+
 typedef struct
 {
     uint16_t type;
     uint16_t source;
     uint16_t target;
+    uint16_t flags;
     uint16_t length;
     const void *data;
     uintptr_t value;
+    uint32_t timestamp;
 } app_msg_t;
 
 typedef void (*app_msg_handler_t)(const app_msg_t *msg, void *arg);
@@ -62,14 +77,29 @@ typedef struct
 typedef struct
 {
     uint32_t published;
+    uint32_t received;
     uint32_t dispatched;
     uint32_t dropped;
+    uint32_t overwritten;
     uint32_t handler_calls;
+    uint32_t dispatch_no_handler;
     uint16_t high_used;
     uint16_t normal_used;
     uint16_t high_peak;
     uint16_t normal_peak;
 } app_msg_bus_stats_t;
+
+typedef struct
+{
+    app_msg_t *high_queue;
+    uint16_t high_capacity;
+    app_msg_t *normal_queue;
+    uint16_t normal_capacity;
+    app_msg_subscription_t *subscriptions;
+    uint16_t subscription_capacity;
+    app_msg_full_policy_t high_full_policy;
+    app_msg_full_policy_t normal_full_policy;
+} app_msg_bus_config_t;
 
 typedef struct
 {
@@ -89,8 +119,14 @@ typedef struct
     uint16_t subscription_capacity;
     uint16_t subscription_count;
 
+    app_msg_full_policy_t high_full_policy;
+    app_msg_full_policy_t normal_full_policy;
+
     app_msg_bus_stats_t stats;
 } app_msg_bus_t;
+
+bool app_msg_bus_init_with_config(app_msg_bus_t *bus,
+                                  const app_msg_bus_config_t *config);
 
 bool app_msg_bus_init(app_msg_bus_t *bus,
                       app_msg_t *high_queue,

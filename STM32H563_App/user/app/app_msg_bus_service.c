@@ -30,18 +30,23 @@ static void app_msg_bus_unlock(uint32_t state)
 
 UINT app_msg_bus_service_init(void)
 {
+    app_msg_bus_config_t config;
     UINT status;
 
     if(g_initialized != 0U)
         return TX_SUCCESS;
 
-    if(!app_msg_bus_init(&g_bus,
-                         g_high_queue,
-                         APP_MSG_BUS_HIGH_QUEUE_DEPTH,
-                         g_normal_queue,
-                         APP_MSG_BUS_NORMAL_QUEUE_DEPTH,
-                         g_subscriptions,
-                         APP_MSG_BUS_HANDLER_COUNT))
+    memset(&config, 0, sizeof(config));
+    config.high_queue = g_high_queue;
+    config.high_capacity = APP_MSG_BUS_HIGH_QUEUE_DEPTH;
+    config.normal_queue = g_normal_queue;
+    config.normal_capacity = APP_MSG_BUS_NORMAL_QUEUE_DEPTH;
+    config.subscriptions = g_subscriptions;
+    config.subscription_capacity = APP_MSG_BUS_HANDLER_COUNT;
+    config.high_full_policy = APP_MSG_DROP_OLDEST;
+    config.normal_full_policy = APP_MSG_DROP_NEWEST;
+
+    if(!app_msg_bus_init_with_config(&g_bus, &config))
         return TX_SIZE_ERROR;
 
     status = tx_event_flags_create(&g_events, "app msg bus");

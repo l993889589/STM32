@@ -102,16 +102,73 @@ static void test_filter_and_overflow_stats(void)
 
     app_msg_bus_get_stats(&bus, &stats);
     assert(stats.published == 2U);
+    assert(stats.received == 2U);
     assert(stats.dispatched == 2U);
     assert(stats.dropped == 1U);
     assert(stats.handler_calls == 1U);
+    assert(stats.dispatch_no_handler == 1U);
     assert(stats.normal_peak == 1U);
+}
+
+static void test_config_drop_oldest_and_flags(void)
+{
+    app_msg_t high_queue[1];
+    app_msg_t normal_queue[2];
+    app_msg_subscription_t subscriptions[1];
+    app_msg_bus_config_t config;
+    app_msg_bus_stats_t stats;
+    app_msg_bus_t bus;
+    app_msg_t msg = {0};
+    app_msg_t out = {0};
+
+    config.high_queue = high_queue;
+    config.high_capacity = 1U;
+    config.normal_queue = normal_queue;
+    config.normal_capacity = 2U;
+    config.subscriptions = subscriptions;
+    config.subscription_capacity = 1U;
+    config.high_full_policy = APP_MSG_DROP_OLDEST;
+    config.normal_full_policy = APP_MSG_DROP_OLDEST;
+
+    assert(app_msg_bus_init_with_config(&bus, &config));
+
+    msg.type = APP_MSG_TYPE_STATUS_RESPONSE;
+    msg.source = APP_MSG_SOURCE_SYSTEM;
+    msg.value = 100U;
+    assert(app_msg_bus_publish(&bus, &msg, APP_MSG_PRIORITY_NORMAL));
+
+    msg.value = 101U;
+    assert(app_msg_bus_publish(&bus, &msg, APP_MSG_PRIORITY_NORMAL));
+
+    msg.value = 102U;
+    assert(app_msg_bus_publish(&bus, &msg, APP_MSG_PRIORITY_NORMAL));
+
+    assert(app_msg_bus_receive(&bus, &out));
+    assert(out.value == 101U);
+    assert(app_msg_bus_receive(&bus, &out));
+    assert(out.value == 102U);
+    assert(!app_msg_bus_receive(&bus, &out));
+
+    msg.value = 200U;
+    assert(app_msg_bus_publish(&bus, &msg, APP_MSG_PRIORITY_HIGH));
+    assert(app_msg_bus_receive(&bus, &out));
+    assert(out.value == 200U);
+    assert((out.flags & APP_MSG_FLAG_HIGH) != 0U);
+
+    app_msg_bus_get_stats(&bus, &stats);
+    assert(stats.published == 4U);
+    assert(stats.received == 3U);
+    assert(stats.overwritten == 1U);
+    assert(stats.dropped == 0U);
+    assert(stats.normal_peak == 2U);
+    assert(stats.high_peak == 1U);
 }
 
 int main(void)
 {
     test_priority_order();
     test_filter_and_overflow_stats();
+    test_config_drop_oldest_and_flags();
     (void)printf("app_msg_bus tests passed\n");
     return 0;
 }

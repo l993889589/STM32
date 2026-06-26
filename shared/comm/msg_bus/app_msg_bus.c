@@ -5,12 +5,34 @@
 static bool app_msg_bus_push(app_msg_t *queue,
                              uint16_t capacity,
                              uint16_t *in,
+                             uint16_t *out,
                              uint16_t *count,
-                             const app_msg_t *msg)
+                             const app_msg_t *msg,
+                             app_msg_full_policy_t policy,
+                             app_msg_bus_stats_t *stats)
 {
     if(queue == NULL || capacity == 0U || in == NULL || count == NULL ||
-       msg == NULL || *count >= capacity)
+       out == NULL || msg == NULL || stats == NULL)
         return false;
+
+    if(*count >= capacity)
+    {
+        if(policy == APP_MSG_DROP_NEWEST)
+        {
+            stats->dropped++;
+            return false;
+        }
+
+        /*
+         * APP_MSG_FORCE_HIGH_PRIORITY is intentionally treated as
+         * drop-oldest on the selected priority queue. The bus core does not
+         * move messages between queues; applications choose queue sizes and
+         * policy according to the severity of their events.
+         */
+        *out = (uint16_t)((*out + 1U) % capacity);
+        (*count)--;
+        stats->overwritten++;
+    }
 
     queue[*in] = *msg;
     *in = (uint16_t)((*in + 1U) % capacity);
@@ -48,6 +70,27 @@ static bool app_msg_matches(const app_msg_subscription_t *sub, const app_msg_t *
     return true;
 }
 
+bool app_msg_bus_init_with_config(app_msg_bus_t *bus,
+                                  const app_msg_bus_config_t *config)
+{
+    if(bus == NULL || config == NULL ||
+       config->high_queue == NULL || config->high_capacity == 0U ||
+       config->normal_queue == NULL || config->normal_capacity == 0U ||
+       config->subscriptions == NULL || config->subscription_capacity == 0U)
+        return false;
+
+    memset(bus, 0, sizeof(*bus));
+    bus->high_queue = config->high_queue;
+    bus->high_capacity = config->high_capacity;
+    bus->normal_queue = config->normal_queue;
+    bus->normal_capacity = config->normal_capacity;
+    bus->subscriptions = config->subscriptions;
+    bus->subscription_capacity = config->subscription_capacity;
+    bus->high_full_policy = config->high_full_policy;
+    bus->normal_full_policy = config->normal_full_policy;
+    return true;
+}
+
 bool app_msg_bus_init(app_msg_bus_t *bus,
                       app_msg_t *high_queue,
                       uint16_t high_capacity,
@@ -56,19 +99,17 @@ bool app_msg_bus_init(app_msg_bus_t *bus,
                       app_msg_subscription_t *subscriptions,
                       uint16_t subscription_capacity)
 {
-    if(bus == NULL || high_queue == NULL || high_capacity == 0U ||
-       normal_queue == NULL || normal_capacity == 0U ||
-       subscriptions == NULL || subscription_capacity == 0U)
-        return false;
+    app_msg_bus_config_t config;
 
-    memset(bus, 0, sizeof(*bus));
-    bus->high_queue = high_queue;
-    bus->high_capacity = high_capacity;
-    bus->normal_queue = normal_queue;
-    bus->normal_capacity = normal_capacity;
-    bus->subscriptions = subscriptions;
-    bus->subscription_capacity = subscription_capacity;
-    return true;
+    config.high_queue = high_queue;
+    config.high_capacity = high_capacity;
+    config.normal_queue = normal_queue;
+    config.normal_capacity = normal_capacity;
+    config.subscriptions = subscriptions;
+    config.subscription_capacity = subscription_capacity;
+    config.high_full_policy = APP_MSG_DROP_NEWEST;
+    config.normal_full_policy = APP_MSG_DROP_NEWEST;
+    return app_msg_bus_init_with_config(bus, &config);
 }
 
 bool app_msg_bus_subscribe(app_msg_bus_t *bus,
@@ -96,17 +137,25 @@ bool app_msg_bus_publish(app_msg_bus_t *bus,
                          app_msg_priority_t priority)
 {
     bool ok;
+    app_msg_t queued_msg;
 
     if(bus == NULL || msg == NULL)
         return false;
+
+    queued_msg = *msg;
+    if(priority == APP_MSG_PRIORITY_HIGH)
+        queued_msg.flags |= APP_MSG_FLAG_HIGH;
 
     if(priority == APP_MSG_PRIORITY_HIGH)
     {
         ok = app_msg_bus_push(bus->high_queue,
                               bus->high_capacity,
                               &bus->high_in,
+                              &bus->high_out,
                               &bus->high_count,
-                              msg);
+                              &queued_msg,
+                              bus->high_full_policy,
+                              &bus->stats);
         if(ok && bus->high_count > bus->stats.high_peak)
             bus->stats.high_peak = bus->high_count;
     }
@@ -115,16 +164,17 @@ bool app_msg_bus_publish(app_msg_bus_t *bus,
         ok = app_msg_bus_push(bus->normal_queue,
                               bus->normal_capacity,
                               &bus->normal_in,
+                              &bus->normal_out,
                               &bus->normal_count,
-                              msg);
+                              &queued_msg,
+                              bus->normal_full_policy,
+                              &bus->stats);
         if(ok && bus->normal_count > bus->stats.normal_peak)
             bus->stats.normal_peak = bus->normal_count;
     }
 
     if(ok)
         bus->stats.published++;
-    else
-        bus->stats.dropped++;
 
     bus->stats.high_used = bus->high_count;
     bus->stats.normal_used = bus->normal_count;
@@ -153,6 +203,7 @@ bool app_msg_bus_receive(app_msg_bus_t *bus, app_msg_t *msg)
         return false;
 
     bus->stats.dispatched++;
+    bus->stats.received++;
     bus->stats.high_used = bus->high_count;
     bus->stats.normal_used = bus->normal_count;
     return true;
@@ -175,6 +226,9 @@ uint32_t app_msg_bus_dispatch(app_msg_bus_t *bus, const app_msg_t *msg)
             calls++;
         }
     }
+
+    if(calls == 0U)
+        bus->stats.dispatch_no_handler++;
 
     return calls;
 }

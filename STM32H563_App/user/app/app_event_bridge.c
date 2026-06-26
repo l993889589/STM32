@@ -1,5 +1,7 @@
 #include "app_event_bridge.h"
 
+#include <string.h>
+
 #include "app_config.h"
 #include "app_msg_bus_service.h"
 
@@ -12,6 +14,7 @@ static void app_event_publish(app_msg_source_t source,
 #if APP_ENABLE_MSG_BUS
     app_msg_t msg;
 
+    memset(&msg, 0, sizeof(msg));
     msg.type = (uint16_t)type;
     msg.source = (uint16_t)source;
     msg.target = APP_MSG_ANY_SOURCE;

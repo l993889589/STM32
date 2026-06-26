@@ -18,3 +18,5 @@ This keeps the default direct path unchanged when the macro is off, while allowi
 New consumers should register through `app_msg_bus_service_subscribe()` instead of modifying the global bus directly. That keeps the subscription table protected by the same critical section used for publish/dispatch access.
 
 The reusable Message Bus core now lives under `shared/comm/msg_bus`. This H563 application keeps only the board-specific service wrapper and bridge code.
+
+The H563 service wrapper owns ThreadX synchronization and event-flag wakeup. The shared Message Bus core remains lock-free and portable; do not add ThreadX or HAL dependencies to it.
