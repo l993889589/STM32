@@ -14,7 +14,7 @@ __asm(".global __use_no_semihosting\n");
 #include "app_shell.h"
 #include "bsp.h"
 #include "ldc_core.h"
-#include "ldc/ldc_endpoint_threadx.h"
+#include "../../../shared/comm/ldc_endpoint/threadx/ldc_endpoint_threadx.h"
 #include "ota_layout.h"
 #include "usb_console.h"
 #include "usb_vendor_transport.h"

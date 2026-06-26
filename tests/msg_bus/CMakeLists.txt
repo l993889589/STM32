@@ -6,11 +6,11 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 add_executable(test_msg_bus
     test_msg_bus.c
-    "${CMAKE_CURRENT_LIST_DIR}/../../STM32H563_App/user/app/app_msg_bus.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../../shared/comm/msg_bus/app_msg_bus.c"
 )
 
 target_include_directories(test_msg_bus PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/../../STM32H563_App/user/app"
+    "${CMAKE_CURRENT_LIST_DIR}/../../shared/comm/msg_bus"
 )
 
 if(MSVC)

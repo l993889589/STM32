@@ -33,7 +33,7 @@
 #include "app_ldc_config.h"
 #include "at_session.h"
 #include "bsp.h"
-#include "ldc/ldc_endpoint_threadx.h"
+#include "../../../shared/comm/ldc_endpoint/threadx/ldc_endpoint_threadx.h"
 
 /* 本文件使用的静态全局变量（模块级状态） */
 static ldc_endpoint_t g_endpoint;

@@ -12,7 +12,7 @@
 #include "at_module_w800.h"
 #include "at_session.h"
 #include "bsp.h"
-#include "ldc/ldc_endpoint_threadx.h"
+#include "../../../shared/comm/ldc_endpoint/threadx/ldc_endpoint_threadx.h"
 #include "mqtt_packet.h"
 #include "usb_console.h"
 

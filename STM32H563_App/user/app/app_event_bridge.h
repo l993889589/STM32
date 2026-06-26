@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "app_msg_bus.h"
+#include "../../../shared/comm/msg_bus/app_msg_bus.h"
 
 void app_event_link_activity(app_msg_source_t source, uint16_t length);
 void app_event_link_frame(app_msg_source_t source, uint16_t length);

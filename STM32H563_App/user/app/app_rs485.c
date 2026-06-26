@@ -7,7 +7,7 @@
 #include "app_event_bridge.h"
 #include "app_ldc_config.h"
 #include "bsp.h"
-#include "ldc/ldc_endpoint_threadx.h"
+#include "../../../shared/comm/ldc_endpoint/threadx/ldc_endpoint_threadx.h"
 
 static ldc_endpoint_t g_endpoint;
 static uint8_t g_ldc_ring[APP_RS485_RX_BUF_SIZE + 1U];

@@ -884,12 +884,12 @@
             <File>
               <FileName>app_msg_bus.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\app\app_msg_bus.c</FilePath>
+              <FilePath>..\..\shared\comm\msg_bus\app_msg_bus.c</FilePath>
             </File>
             <File>
               <FileName>app_msg_bus.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\app\app_msg_bus.h</FilePath>
+              <FilePath>..\..\shared\comm\msg_bus\app_msg_bus.h</FilePath>
             </File>
             <File>
               <FileName>app_msg_bus_service.c</FileName>
@@ -1154,12 +1154,12 @@
             <File>
               <FileName>ldc_endpoint_threadx.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\user\ldc\ldc_endpoint_threadx.c</FilePath>
+              <FilePath>..\..\shared\comm\ldc_endpoint\threadx\ldc_endpoint_threadx.c</FilePath>
             </File>
             <File>
               <FileName>ldc_endpoint_threadx.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\user\ldc\ldc_endpoint_threadx.h</FilePath>
+              <FilePath>..\..\shared\comm\ldc_endpoint\threadx\ldc_endpoint_threadx.h</FilePath>
             </File>
           </Files>
         </Group>

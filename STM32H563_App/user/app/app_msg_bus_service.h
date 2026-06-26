@@ -1,7 +1,7 @@
 #ifndef APP_MSG_BUS_SERVICE_H
 #define APP_MSG_BUS_SERVICE_H
 
-#include "app_msg_bus.h"
+#include "../../../shared/comm/msg_bus/app_msg_bus.h"
 #include "tx_api.h"
 
 UINT app_msg_bus_service_init(void);
