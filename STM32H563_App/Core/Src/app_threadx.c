@@ -28,6 +28,7 @@
 #include "app_msg_bus_service.h"
 #include "app_ota.h"
 #include "app_nearlink.h"
+#include "app_ui.h"
 
 /* USER CODE END Includes */
 
@@ -53,6 +54,7 @@ static TX_THREAD app_led_thread;
 static TX_THREAD app_w800_thread;
 static TX_THREAD app_ota_confirm_thread;
 static TX_THREAD app_nearlink_thread;
+static TX_THREAD app_ui_thread;
 #if APP_ENABLE_MSG_BUS
 static TX_THREAD app_msg_bus_thread;
 #endif
@@ -61,6 +63,7 @@ static UCHAR app_led_thread_stack[512];
 static UCHAR app_w800_thread_stack[4096];
 static UCHAR app_ota_confirm_thread_stack[2048];
 static UCHAR app_nearlink_thread_stack[3072];
+static UCHAR app_ui_thread_stack[6144];
 #if APP_ENABLE_MSG_BUS
 static UCHAR app_msg_bus_thread_stack[2048];
 #endif
@@ -100,6 +103,12 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
     return ret;
   }
 
+  ret = app_ui_init();
+  if(ret != TX_SUCCESS)
+  {
+    return ret;
+  }
+
 #if APP_ENABLE_MSG_BUS
   if(tx_thread_create(&app_msg_bus_thread, "App Message Bus",
                       app_msg_bus_task_entry, 0U,
@@ -133,6 +142,15 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
                       app_nearlink_task_entry, 0U,
                       app_nearlink_thread_stack, sizeof(app_nearlink_thread_stack),
                       13U, 13U,
+                      TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
+  {
+    return TX_THREAD_ERROR;
+  }
+
+  if(tx_thread_create(&app_ui_thread, "LVGL Dashboard",
+                      app_ui_task_entry, 0U,
+                      app_ui_thread_stack, sizeof(app_ui_thread_stack),
+                      18U, 18U,
                       TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
   {
     return TX_THREAD_ERROR;
