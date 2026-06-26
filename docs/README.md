@@ -10,6 +10,7 @@
 - [usb.md](usb.md)：USB CDC、Vendor Bulk、OTA/压力测试通道规划。
 - [issue-log.md](issue-log.md)：已定位问题和后续处理状态。
 - [workflow.md](workflow.md)：VS Code、Keil、烧录、测试、提交流程。
+- [stm32-communication-architecture.md](stm32-communication-architecture.md)：STM32 通信架构设计手册，解释 LDC、ISR、endpoint、Message Bus、BSP/CubeMX 的取舍。
 
 ## 清理规则
 
