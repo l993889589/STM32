@@ -6,6 +6,7 @@
 
 #include "app_board_io.h"
 #include "app_config.h"
+#include "app_event_bridge.h"
 #include "app_ldc_config.h"
 #include "at_module.h"
 #include "at_module_w800.h"
@@ -128,7 +129,10 @@ static void app_w800_uart_rx(bsp_uart_port_t port,
     (void)port;
     (void)arg;
     if(data && length != 0U)
+    {
         (void)ldc_endpoint_write(&g_endpoint, data, length);
+        app_event_link_activity(APP_MSG_SOURCE_W800, length);
+    }
 }
 
 static bool app_w800_mqtt_connect(void)
@@ -225,6 +229,8 @@ UINT app_w800_init(void)
 void app_w800_task_entry(ULONG thread_input)
 {
     app_w800_state_t state = APP_W800_STATE_RESET;
+    app_w800_state_t reported_state = APP_W800_STATE_RESET;
+    bool state_reported = false;
     bool wifi_ready = false;
     bool spi_nor_logged = false;
     const at_wifi_config_t wifi_config =
@@ -238,6 +244,12 @@ void app_w800_task_entry(ULONG thread_input)
     {
         g_wifi_ready = wifi_ready ? 1U : 0U;
         g_mqtt_online = state == APP_W800_STATE_ONLINE ? 1U : 0U;
+        if(!state_reported || state != reported_state)
+        {
+            app_event_status(APP_MSG_SOURCE_W800, (uintptr_t)state);
+            reported_state = state;
+            state_reported = true;
+        }
 
         if(g_reconnect_requested != 0U)
         {

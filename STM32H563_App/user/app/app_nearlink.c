@@ -29,6 +29,7 @@
 
 #include "app_board_io.h"
 #include "app_config.h"
+#include "app_event_bridge.h"
 #include "app_ldc_config.h"
 #include "at_session.h"
 #include "bsp.h"
@@ -129,6 +130,7 @@ static void app_nearlink_data(const char *peer, const uint8_t *data, uint16_t le
     char line[80];
     (void)arg;
     (void)snprintf(line, sizeof(line), "nearlink rx peer=%s len=%u\r\n", peer ? peer : "server", (unsigned int)len);
+    app_event_link_frame(APP_MSG_SOURCE_NEARLINK, len);
     (void)app_usb_cdc_write((const uint8_t *)line, (uint32_t)strlen(line));
     (void)app_usb_cdc_write(data, len);
     (void)app_usb_cdc_write((const uint8_t *)"\r\n", 2U);
@@ -143,6 +145,7 @@ static void app_nearlink_uart_rx(bsp_uart_port_t port, const uint8_t *data, uint
     {
         g_uart_rx_bytes += len;
         (void)ldc_endpoint_write(&g_endpoint, data, len);
+        app_event_link_activity(APP_MSG_SOURCE_NEARLINK, len);
     }
 }
 
@@ -218,6 +221,7 @@ int app_nearlink_request_role(at_nearlink_role_t role, const char *local_name, c
     g_config.local_address = role == AT_NEARLINK_ROLE_SERVER ?
                              APP_NEARLINK_SERVER_ADDRESS : APP_NEARLINK_CLIENT_ADDRESS;
     g_apply_pending = 1U;
+    app_event_status(APP_MSG_SOURCE_NEARLINK, (uintptr_t)role);
     (void)ldc_endpoint_signal(&g_endpoint, LDC_ENDPOINT_EVT_CONTROL);
     return 0;
 }
@@ -274,7 +278,10 @@ void app_nearlink_task_entry(ULONG thread_input)
             g_apply_pending = 0U;
             (void)at_nearlink_stop(&g_module);
             if(!at_nearlink_apply(&g_module, &g_config))
+            {
+                app_event_error(APP_MSG_SOURCE_NEARLINK, 1U);
                 app_nearlink_log("nearlink error: role apply failed", NULL);
+            }
         }
 
         /* 如果有待发送数据，则调用 at_nearlink_send 发送 */
@@ -282,7 +289,10 @@ void app_nearlink_task_entry(ULONG thread_input)
         {
             uint16_t len = g_send_len;
             if(!at_nearlink_send(&g_module, g_send_data, len))
+            {
+                app_event_error(APP_MSG_SOURCE_NEARLINK, 2U);
                 app_nearlink_log("nearlink error: send failed", NULL);
+            }
             g_send_len = 0U;
         }
 

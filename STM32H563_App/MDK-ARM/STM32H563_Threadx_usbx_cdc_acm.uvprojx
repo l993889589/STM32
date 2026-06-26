@@ -902,6 +902,16 @@
               <FilePath>..\user\app\app_msg_bus_service.h</FilePath>
             </File>
             <File>
+              <FileName>app_event_bridge.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\app\app_event_bridge.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_event_bridge.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\app\app_event_bridge.h</FilePath>
+            </File>
+            <File>
               <FileName>app_ldc_config.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\app\app_ldc_config.c</FilePath>

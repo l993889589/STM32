@@ -4,6 +4,7 @@
 
 #include "app_board_io.h"
 #include "app_config.h"
+#include "app_event_bridge.h"
 #include "app_ldc_config.h"
 #include "bsp.h"
 #include "ldc/ldc_endpoint_threadx.h"
@@ -63,7 +64,10 @@ static void app_rs485_uart_rx(bsp_uart_port_t port,
     (void)port;
     (void)arg;
     if(data && length != 0U)
+    {
         (void)ldc_endpoint_write(&g_endpoint, data, length);
+        app_event_link_activity(APP_MSG_SOURCE_RS485, length);
+    }
 }
 
 static void app_rs485_process_packets(void)
@@ -73,6 +77,7 @@ static void app_rs485_process_packets(void)
 
     while((length = ldc_endpoint_read(&g_endpoint, frame, sizeof(frame))) > 0)
     {
+        app_event_link_frame(APP_MSG_SOURCE_RS485, (uint16_t)length);
         app_rs485_log_frame(frame, (uint32_t)length);
         (void)modbus_rtu_slave_process(&g_modbus_slave, frame, (uint16_t)length);
     }
