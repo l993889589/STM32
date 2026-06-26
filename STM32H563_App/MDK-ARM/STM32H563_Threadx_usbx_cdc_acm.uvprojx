@@ -882,6 +882,26 @@
               <FilePath>..\user\app\app_config.h</FilePath>
             </File>
             <File>
+              <FileName>app_msg_bus.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\app\app_msg_bus.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_msg_bus.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\app\app_msg_bus.h</FilePath>
+            </File>
+            <File>
+              <FileName>app_msg_bus_service.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\app\app_msg_bus_service.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_msg_bus_service.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\app\app_msg_bus_service.h</FilePath>
+            </File>
+            <File>
               <FileName>app_ldc_config.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\app\app_ldc_config.c</FilePath>

@@ -5,6 +5,15 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 
+# MSBuild can fail with "key Path/PATH already added" when the parent process
+# environment contains both spellings. Normalize it once for all CMake suites.
+$ProcessPath = [Environment]::GetEnvironmentVariable("Path", "Process")
+if([string]::IsNullOrEmpty($ProcessPath)) {
+    $ProcessPath = [Environment]::GetEnvironmentVariable("PATH", "Process")
+}
+[Environment]::SetEnvironmentVariable("PATH", $null, "Process")
+[Environment]::SetEnvironmentVariable("Path", $ProcessPath, "Process")
+
 function Invoke-TestSuite {
     param(
         [string]$Name,
@@ -26,6 +35,7 @@ function Invoke-TestSuite {
 }
 
 Invoke-TestSuite -Name "ldc" -Source (Join-Path $Root "tests\ldc")
+Invoke-TestSuite -Name "msg_bus" -Source (Join-Path $Root "tests\msg_bus")
 Invoke-TestSuite -Name "at" -Source (Join-Path $Root "tests\at")
 Invoke-TestSuite -Name "modbus" -Source (Join-Path $Root "STM32H563_App\user\libmodbus\tests")
 Invoke-TestSuite -Name "usb" -Source (Join-Path $Root "STM32H563_App\user\usb\tests")

@@ -24,6 +24,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "app_board_io.h"
+#include "app_config.h"
+#include "app_msg_bus_service.h"
 #include "app_ota.h"
 #include "app_nearlink.h"
 
@@ -51,11 +53,17 @@ static TX_THREAD app_led_thread;
 static TX_THREAD app_w800_thread;
 static TX_THREAD app_ota_confirm_thread;
 static TX_THREAD app_nearlink_thread;
+#if APP_ENABLE_MSG_BUS
+static TX_THREAD app_msg_bus_thread;
+#endif
 static UCHAR app_rs485_thread_stack[1024];
 static UCHAR app_led_thread_stack[512];
 static UCHAR app_w800_thread_stack[4096];
 static UCHAR app_ota_confirm_thread_stack[2048];
 static UCHAR app_nearlink_thread_stack[3072];
+#if APP_ENABLE_MSG_BUS
+static UCHAR app_msg_bus_thread_stack[2048];
+#endif
 
 /* USER CODE END PV */
 
@@ -91,6 +99,17 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
   {
     return ret;
   }
+
+#if APP_ENABLE_MSG_BUS
+  if(tx_thread_create(&app_msg_bus_thread, "App Message Bus",
+                      app_msg_bus_task_entry, 0U,
+                      app_msg_bus_thread_stack, sizeof(app_msg_bus_thread_stack),
+                      11U, 11U,
+                      TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
+  {
+    return TX_THREAD_ERROR;
+  }
+#endif
 
   if(tx_thread_create(&app_rs485_thread, "RS485 Modbus Slave",
                       app_rs485_task_entry, 0U,

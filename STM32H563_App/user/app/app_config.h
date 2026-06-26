@@ -5,6 +5,20 @@
 
 #define APP_FIRMWARE_VERSION                 "1.0.0"
 
+/*
+ * Optional application Message Bus.
+ *
+ * 0: keep the current direct service path. This is the lowest-overhead mode
+ *    for small device counts.
+ * 1: enable a central static message dispatcher above LDC endpoints. LDC still
+ *    owns byte/block buffering and framing; the bus only routes upper-layer
+ *    events, control requests and logs.
+ */
+#define APP_ENABLE_MSG_BUS                 0U
+#define APP_MSG_BUS_HIGH_QUEUE_DEPTH       8U
+#define APP_MSG_BUS_NORMAL_QUEUE_DEPTH     32U
+#define APP_MSG_BUS_HANDLER_COUNT          16U
+
 #define APP_USB_LDC_MAX_FRAME              256U
 #define APP_RS485_LDC_MAX_FRAME            256U
 #define APP_RS485_MODBUS_UNIT_ID           1U
