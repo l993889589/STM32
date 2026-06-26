@@ -1116,6 +1116,16 @@
               <FileType>5</FileType>
               <FilePath>..\user\bsp\bsp_uart.h</FilePath>
             </File>
+            <File>
+              <FileName>bsp_lcd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\bsp\bsp_lcd.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_lcd.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\bsp\bsp_lcd.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

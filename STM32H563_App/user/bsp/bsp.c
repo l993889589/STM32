@@ -19,6 +19,7 @@ void bsp_init(void)
     bsp_nearlink_reset_release();
     bsp_led_off(BSP_LED_STATUS);
 		bsp_led_init();
+    (void)bsp_lcd_init();
 }
 
 void bsp_led_on(bsp_led_t led)
