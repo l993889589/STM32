@@ -5,6 +5,10 @@
 #include "tx_api.h"
 
 UINT app_msg_bus_service_init(void);
+bool app_msg_bus_service_subscribe(uint16_t type,
+                                   uint16_t source,
+                                   app_msg_handler_t handler,
+                                   void *arg);
 bool app_msg_bus_service_publish(const app_msg_t *msg, app_msg_priority_t priority);
 app_msg_bus_t *app_msg_bus_default(void);
 void app_msg_bus_service_get_stats(app_msg_bus_stats_t *stats);

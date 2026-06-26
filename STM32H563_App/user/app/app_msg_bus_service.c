@@ -52,6 +52,23 @@ UINT app_msg_bus_service_init(void)
     return TX_SUCCESS;
 }
 
+bool app_msg_bus_service_subscribe(uint16_t type,
+                                   uint16_t source,
+                                   app_msg_handler_t handler,
+                                   void *arg)
+{
+    bool ok;
+    uint32_t state;
+
+    if(g_initialized == 0U)
+        return false;
+
+    state = app_msg_bus_lock();
+    ok = app_msg_bus_subscribe(&g_bus, type, source, handler, arg);
+    app_msg_bus_unlock(state);
+    return ok;
+}
+
 bool app_msg_bus_service_publish(const app_msg_t *msg, app_msg_priority_t priority)
 {
     bool ok;
@@ -127,6 +144,18 @@ void app_msg_bus_task_entry(ULONG thread_input)
 UINT app_msg_bus_service_init(void)
 {
     return TX_SUCCESS;
+}
+
+bool app_msg_bus_service_subscribe(uint16_t type,
+                                   uint16_t source,
+                                   app_msg_handler_t handler,
+                                   void *arg)
+{
+    (void)type;
+    (void)source;
+    (void)handler;
+    (void)arg;
+    return false;
 }
 
 bool app_msg_bus_service_publish(const app_msg_t *msg, app_msg_priority_t priority)
