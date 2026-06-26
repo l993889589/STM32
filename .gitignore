@@ -1,6 +1,11 @@
 # Archives and generated packages
 *.zip
 ota_package/
+build/
+tmp/
+md files/
+rules/
+system-interface-doc.pdf
 
 # Keil / Arm build outputs and local IDE state
 **/MDK-ARM/*.log
@@ -21,9 +26,17 @@ ota_package/
 **/*.crf
 
 # Node / Electron generated files
+desktop-debug-assistant/
 **/node_modules/
 **/dist/
 **/release/
+**/release-clean/
+**/release-clean2/
+**/release-fixed/
+**/release-shell/
+**/release-shell2/
+**/release-shell-final/
+**/release-shell-ready/
 **/release-next/
 
 # Local nested scratch repository
