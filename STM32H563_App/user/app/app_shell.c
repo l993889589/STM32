@@ -5,6 +5,7 @@
 
 #include "app_board_io.h"
 #include "app_config.h"
+#include "app_msg_bus_service.h"
 #include "app_nearlink.h"
 #include "bsp.h"
 #include "main.h"
@@ -226,6 +227,32 @@ static int app_shell_cmd_usb(shell_t *shell, int argc, char **argv, void *arg)
     return 0;
 }
 
+static int app_shell_cmd_bus(shell_t *shell, int argc, char **argv, void *arg)
+{
+    app_msg_bus_stats_t stats;
+
+    (void)arg;
+    if(argc != 2 || strcmp(argv[1], "status") != 0)
+    {
+        (void)shell_write(shell, "usage: bus status\r\n");
+        return -1;
+    }
+
+    app_msg_bus_service_get_stats(&stats);
+    (void)shell_printf(shell,
+                       "bus %s published=%lu dispatched=%lu dropped=%lu handlers=%lu high=%u/%u normal=%u/%u\r\n",
+                       APP_ENABLE_MSG_BUS ? "enabled" : "disabled",
+                       (unsigned long)stats.published,
+                       (unsigned long)stats.dispatched,
+                       (unsigned long)stats.dropped,
+                       (unsigned long)stats.handler_calls,
+                       (unsigned int)stats.high_used,
+                       (unsigned int)stats.high_peak,
+                       (unsigned int)stats.normal_used,
+                       (unsigned int)stats.normal_peak);
+    return 0;
+}
+
 static int app_shell_cmd_nearlink(shell_t *shell, int argc, char **argv, void *arg)
 {
     app_nearlink_status_t status;
@@ -297,6 +324,7 @@ static const shell_command_t g_app_shell_commands[] =
     {"mqtt", "mqtt status|reconnect", "inspect or reconnect MQTT", app_shell_cmd_mqtt, NULL},
     {"ota", "ota status", "show OTA receive state", app_shell_cmd_ota, NULL},
     {"usb", "usb status", "show Vendor Bulk counters", app_shell_cmd_usb, NULL},
+    {"bus", "bus status", "show optional Message Bus counters", app_shell_cmd_bus, NULL},
     {"nearlink", "nearlink status|role server [local]|role client <server> [local]|send <text>",
      "configure and use NearLink SLE", app_shell_cmd_nearlink, NULL}
 };
