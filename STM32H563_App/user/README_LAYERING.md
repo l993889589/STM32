@@ -18,7 +18,7 @@ HAL UART/USB callback
 
 - `user/bsp`：引脚、UART/SPI 句柄绑定和 HAL 回调转发，不解析协议。
 - `shared/ldc`：纯 C 字节流缓存、分帧、packet FIFO 和统计；无 HAL、ThreadX 或业务代码。
-- `user/ldc/ldc_endpoint_threadx.*`：LDC 与 ThreadX Event Flags 的唯一适配层。
+- `shared/comm/ldc_endpoint/threadx/ldc_endpoint_threadx.*`：LDC 与 ThreadX Event Flags 的唯一适配层。
 - `user/at/core`：AT 行解析、URC、同步会话和命令计划。
 - `user/at/modules`：具体模组命令及响应解析。
 - `user/app/app_*`：服务初始化、协议消费和业务状态机。
