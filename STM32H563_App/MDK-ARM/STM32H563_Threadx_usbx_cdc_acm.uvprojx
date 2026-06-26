@@ -1057,6 +1057,16 @@
               <FilePath>..\user\ui\lvgl\app_ui.h</FilePath>
             </File>
             <File>
+              <FileName>app_ui_model.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\ui\lvgl\app_ui_model.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_ui_model.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\ui\lvgl\app_ui_model.h</FilePath>
+            </File>
+            <File>
               <FileName>lv_port_disp.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\ui\lvgl\lv_port_disp.c</FilePath>

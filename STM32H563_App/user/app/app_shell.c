@@ -7,6 +7,7 @@
 #include "app_config.h"
 #include "app_msg_bus_service.h"
 #include "app_nearlink.h"
+#include "app_ui.h"
 #include "bsp.h"
 #include "main.h"
 #include "shell.h"
@@ -312,6 +313,42 @@ static int app_shell_cmd_nearlink(shell_t *shell, int argc, char **argv, void *a
     return -1;
 }
 
+static int app_shell_cmd_ui(shell_t *shell, int argc, char **argv, void *arg)
+{
+    app_ui_page_t page;
+
+    (void)arg;
+    if(argc == 2 && strcmp(argv[1], "status") == 0)
+    {
+        page = app_ui_get_page();
+        (void)shell_printf(shell, "ui page=%s\r\n",
+                           page == APP_UI_PAGE_COMM ? "comm" : "dashboard");
+        return 0;
+    }
+
+    if(argc == 3 && strcmp(argv[1], "page") == 0)
+    {
+        if(strcmp(argv[2], "dashboard") == 0)
+        {
+            if(app_ui_request_page(APP_UI_PAGE_DASHBOARD) == 0)
+            {
+                (void)shell_write(shell, "ui page dashboard requested\r\n");
+                return 0;
+            }
+        }
+        else if(strcmp(argv[2], "comm") == 0)
+        {
+            if(app_ui_request_page(APP_UI_PAGE_COMM) == 0)
+            {
+                (void)shell_write(shell, "ui page comm requested\r\n");
+                return 0;
+            }
+        }
+    }
+
+    (void)shell_write(shell, "usage: ui status|page dashboard|page comm\r\n");
+    return -1;
+}
 static const shell_command_t g_app_shell_commands[] =
 {
     {"help", "help [command]", "show command help", app_shell_cmd_help, NULL},
@@ -326,7 +363,8 @@ static const shell_command_t g_app_shell_commands[] =
     {"usb", "usb status", "show Vendor Bulk counters", app_shell_cmd_usb, NULL},
     {"bus", "bus status", "show optional Message Bus counters", app_shell_cmd_bus, NULL},
     {"nearlink", "nearlink status|role server [local]|role client <server> [local]|send <text>",
-     "configure and use NearLink SLE", app_shell_cmd_nearlink, NULL}
+     "configure and use NearLink SLE", app_shell_cmd_nearlink, NULL},
+    {"ui", "ui status|page dashboard|page comm", "switch LVGL pages", app_shell_cmd_ui, NULL}
 };
 
 int app_shell_init(void)
