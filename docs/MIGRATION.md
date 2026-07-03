@@ -36,9 +36,9 @@ For stronger historical continuity, the recommended follow-up is one of:
 
 Excluded from this first publication pass:
 
-- `D:\Embedded\备份`
-- `D:\Embedded\手册`
-- `D:\Embedded\资料`
+- local backup folders
+- local manuals and datasheet collections
+- local reference-material folders
 - large learning/reference packages under `F4`, `H7`, `wds`, and `cs`
 - generated binaries and local tooling bundles
 
