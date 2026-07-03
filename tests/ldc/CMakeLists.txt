@@ -8,10 +8,11 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
-set(LDC_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../shared/ldc")
+set(LDC_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../STM32H563_App/user/ldc/core")
 
 add_library(ldc_core STATIC
     "${LDC_ROOT}/ldc_core.c"
+    "${LDC_ROOT}/ldc_easy.c"
     "${LDC_ROOT}/ldc_ring.c"
     "${LDC_ROOT}/ldc_packet.c"
 )
@@ -25,10 +26,15 @@ endif()
 
 add_executable(test_ldc test_ldc.c)
 target_link_libraries(test_ldc PRIVATE ldc_core)
+add_executable(test_ldc_easy test_ldc_easy.c)
+target_link_libraries(test_ldc_easy PRIVATE ldc_core)
 if(MSVC)
     target_compile_options(test_ldc PRIVATE /W4 /WX)
+    target_compile_options(test_ldc_easy PRIVATE /W4 /WX)
 else()
     target_compile_options(test_ldc PRIVATE -Wall -Wextra -Werror -Wpedantic)
+    target_compile_options(test_ldc_easy PRIVATE -Wall -Wextra -Werror -Wpedantic)
 endif()
 
 add_test(NAME ldc_all COMMAND test_ldc)
+add_test(NAME ldc_easy COMMAND test_ldc_easy)

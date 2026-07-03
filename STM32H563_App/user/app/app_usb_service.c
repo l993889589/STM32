@@ -10,11 +10,10 @@ __asm(".global __use_no_semihosting\n");
 #endif
 
 #include "app_config.h"
-#include "app_ldc_config.h"
 #include "app_shell.h"
 #include "bsp.h"
-#include "ldc_core.h"
-#include "../../../shared/comm/ldc_endpoint/threadx/ldc_endpoint_threadx.h"
+#include "ldc_easy.h"
+#include "ldc_port_irq.h"
 #include "ota_layout.h"
 #include "usb_console.h"
 #include "usb_vendor_transport.h"
@@ -23,9 +22,32 @@ __asm(".global __use_no_semihosting\n");
 #define TX_TIMER_TICKS_PER_SECOND       1000U
 #endif
 
+#define APP_ENABLE_USB_RAW_LOG          0U
+#define APP_USB_LDC_MAX_FRAME           256U
+#define APP_USB_RX_BUF_SIZE             256U
+#define APP_USB_PACKET_COUNT            8U
+#define APP_OTA_MAGIC_0                 0x4CU
+#define APP_OTA_MAGIC_1                 0x44U
+#define APP_OTA_MAGIC_2                 0x4FU
+#define APP_OTA_MAGIC_3                 0x54U
+#define APP_OTA_HEADER_SIZE             16U
+#define APP_OTA_MAX_PAYLOAD             224U
+#define APP_OTA_STREAM_BUF_SIZE         (APP_OTA_HEADER_SIZE + APP_OTA_MAX_PAYLOAD + 2U)
+#define APP_OTA_CMD_BEGIN               1U
+#define APP_OTA_CMD_DATA                2U
+#define APP_OTA_CMD_MANIFEST            3U
+#define APP_OTA_CMD_END                 4U
+#define APP_OTA_CMD_RESET               5U
+#define APP_OTA_STATUS_OK               0U
+#define APP_OTA_STATUS_BAD_FRAME        1U
+#define APP_OTA_STATUS_BAD_CRC          2U
+#define APP_OTA_STATUS_BAD_RANGE        3U
+#define APP_OTA_STATUS_FLASH_ERROR      4U
+#define APP_OTA_STATUS_SEQUENCE         5U
+
 static bool g_initialized;
 
-static ldc_endpoint_t g_usb_endpoint;
+static ldc_easy_t g_usb_ldc;
 static uint8_t g_usb_ldc_ring[APP_USB_RX_BUF_SIZE + 1U];
 static ldc_packet_t g_usb_packets[APP_USB_PACKET_COUNT];
 
@@ -45,6 +67,7 @@ static uint32_t g_vendor_stress_bytes;
 static uint8_t g_usb_cdc_dtr;
 
 static UINT app_usb_cdc_write_raw(const uint8_t *data, uint32_t len);
+static int app_usb_shell_write(const uint8_t *data, uint16_t length, void *arg);
 static void app_usb_vendor_frame(const usb_vendor_frame_t *frame, void *arg);
 
 static UINT app_ota_cdc_ack_write(const uint8_t *data, uint32_t len, void *arg)
@@ -65,6 +88,7 @@ static UINT app_ota_vendor_ack_write(const uint8_t *data, uint32_t len, void *ar
 
 static void app_print_hex(const char *prefix, const uint8_t *data, uint32_t len)
 {
+#if APP_ENABLE_USB_RAW_LOG
     char line[96];
     uint32_t offset = 0U;
 
@@ -87,12 +111,21 @@ static void app_print_hex(const char *prefix, const uint8_t *data, uint32_t len)
             (void)app_usb_cdc_write((const uint8_t *)line, (uint32_t)used);
         }
     }
+#else
+    (void)prefix;
+    (void)data;
+    (void)len;
+#endif
 }
 
 static void app_usb_log_line(const char *line)
 {
+#if APP_ENABLE_USB_RAW_LOG
     if(line)
         (void)app_usb_cdc_write((const uint8_t *)line, (uint32_t)strlen(line));
+#else
+    (void)line;
+#endif
 }
 
 static uint16_t app_crc16_modbus(const uint8_t *data, uint32_t len)
@@ -360,8 +393,9 @@ static void app_usb_drain_ldc(void)
     uint8_t frame[APP_USB_LDC_MAX_FRAME];
     int len;
 
-    while((len = ldc_endpoint_read(&g_usb_endpoint, frame, sizeof(frame))) > 0)
+    while((len = ldc_easy_pop(&g_usb_ldc, frame, sizeof(frame))) > 0)
     {
+#if APP_ENABLE_USB_RAW_LOG
         static const char prefix[] = "usb rx";
 
         (void)app_usb_cdc_write((const uint8_t *)prefix, (uint32_t)(sizeof(prefix) - 1U));
@@ -369,6 +403,9 @@ static void app_usb_drain_ldc(void)
         (void)app_usb_cdc_write(frame, (uint32_t)len);
         (void)app_usb_cdc_write((const uint8_t *)"\r\n", 2U);
         app_print_hex("usb hex", frame, (uint32_t)len);
+#else
+        (void)frame;
+#endif
     }
 }
 
@@ -475,8 +512,7 @@ static void app_usb_vendor_frame(const usb_vendor_frame_t *frame, void *arg)
 
 UINT app_usb_service_init(void)
 {
-    const app_ldc_port_config_t *usb_ldc_config;
-    ldc_endpoint_config_t usb_endpoint_config;
+    ldc_easy_config_t usb_ldc_config;
 
     if(g_initialized)
         return TX_SUCCESS;
@@ -487,21 +523,22 @@ UINT app_usb_service_init(void)
         return TX_MUTEX_ERROR;
     if(app_shell_init() != 0)
         return TX_PTR_ERROR;
-
-    usb_ldc_config = app_ldc_config_get(APP_LDC_PORT_USB_CDC);
-    if(!usb_ldc_config)
+    if(app_shell_bind_transport(APP_SHELL_TRANSPORT_USB_CDC, app_usb_shell_write, NULL) != 0)
         return TX_PTR_ERROR;
 
-    usb_endpoint_config.name = usb_ldc_config->name;
-    usb_endpoint_config.ring_buffer = g_usb_ldc_ring;
-    usb_endpoint_config.ring_size = sizeof(g_usb_ldc_ring);
-    usb_endpoint_config.packet_pool = g_usb_packets;
-    usb_endpoint_config.packet_count = APP_USB_PACKET_COUNT;
-    usb_endpoint_config.max_frame = usb_ldc_config->max_frame;
-    usb_endpoint_config.timeout_ms = usb_ldc_config->timeout_ms;
-    usb_endpoint_config.delimiter = usb_ldc_config->delimiter;
-    usb_endpoint_config.mode = LDC_MODE_OVERWRITE;
-    if(ldc_endpoint_init(&g_usb_endpoint, &usb_endpoint_config) != TX_SUCCESS)
+    memset(&usb_ldc_config, 0, sizeof(usb_ldc_config));
+    usb_ldc_config.ring_buffer = g_usb_ldc_ring;
+    usb_ldc_config.ring_size = sizeof(g_usb_ldc_ring);
+    usb_ldc_config.packet_pool = g_usb_packets;
+    usb_ldc_config.packet_count = APP_USB_PACKET_COUNT;
+    usb_ldc_config.max_frame = APP_USB_LDC_MAX_FRAME;
+    usb_ldc_config.timeout_ms = 20U;
+    usb_ldc_config.delimiter_enabled = true;
+    usb_ldc_config.delimiter = (uint8_t)'\n';
+    usb_ldc_config.mode = LDC_MODE_OVERWRITE;
+    usb_ldc_config.lock = ldc_port_irq_lock;
+    usb_ldc_config.unlock = ldc_port_irq_unlock;
+    if(!ldc_easy_init(&g_usb_ldc, &usb_ldc_config))
         return TX_START_ERROR;
 
     g_initialized = true;
@@ -512,14 +549,14 @@ void app_usb_cdc_activate(UX_SLAVE_CLASS_CDC_ACM *cdc_acm)
 {
     usb_console_activate(cdc_acm);
     g_usb_cdc_dtr = 0U;
-    app_shell_disconnected();
+    app_shell_disconnected(APP_SHELL_TRANSPORT_USB_CDC);
 }
 
 void app_usb_cdc_deactivate(UX_SLAVE_CLASS_CDC_ACM *cdc_acm)
 {
     usb_console_deactivate(cdc_acm);
     g_usb_cdc_dtr = 0U;
-    app_shell_disconnected();
+    app_shell_disconnected(APP_SHELL_TRANSPORT_USB_CDC);
 }
 
 void app_usb_cdc_parameter_change(UX_SLAVE_CLASS_CDC_ACM *cdc_acm)
@@ -535,13 +572,13 @@ void app_usb_cdc_parameter_change(UX_SLAVE_CLASS_CDC_ACM *cdc_acm)
     if(line_state.ux_slave_class_cdc_acm_parameter_dtr != 0U)
     {
         if(g_usb_cdc_dtr == 0U)
-            app_shell_connected();
+            app_shell_connected(APP_SHELL_TRANSPORT_USB_CDC);
         g_usb_cdc_dtr = 1U;
     }
     else
     {
         g_usb_cdc_dtr = 0U;
-        app_shell_disconnected();
+        app_shell_disconnected(APP_SHELL_TRANSPORT_USB_CDC);
     }
 }
 
@@ -563,27 +600,38 @@ static UINT app_usb_cdc_write_raw(const uint8_t *data, uint32_t len)
     return usb_console_write(data, len);
 }
 
+static int app_usb_shell_write(const uint8_t *data, uint16_t length, void *arg)
+{
+    (void)arg;
+    return (app_usb_cdc_write(data, length) == UX_SUCCESS) ? (int)length : -1;
+}
+
 void app_usb_cdc_process_rx(const uint8_t *data, uint32_t len)
 {
+    uint32_t written;
+
     if(!data || len == 0U)
         return;
 
     if(app_usb_ota_feed(data, len, app_ota_cdc_ack_write, NULL))
         return;
 
-    if(app_shell_accepts_input(data, (uint16_t)len))
+    if(app_shell_accepts_input(APP_SHELL_TRANSPORT_USB_CDC, data, (uint16_t)len))
     {
-        app_shell_input(data, (uint16_t)len);
+        (void)app_shell_feed(APP_SHELL_TRANSPORT_USB_CDC, data, (uint16_t)len);
         return;
     }
 
-    (void)ldc_endpoint_write(&g_usb_endpoint, data, len);
-    (void)ldc_endpoint_flush(&g_usb_endpoint);
-    app_usb_drain_ldc();
+    written = ldc_easy_add(&g_usb_ldc, data, len);
+    if(written == len)
     {
-        ULONG events;
-        (void)ldc_endpoint_poll(&g_usb_endpoint, &events);
+        (void)ldc_easy_settle(&g_usb_ldc);
     }
+    else if(written != 0U)
+    {
+        (void)ldc_easy_abort(&g_usb_ldc);
+    }
+    app_usb_drain_ldc();
 }
 
 void app_usb_cdc_service(void)
@@ -604,7 +652,7 @@ void app_usb_service_get_status(app_usb_service_status_t *status)
                                           &status->vendor_crc_errors,
                                           &status->vendor_length_errors,
                                           &status->vendor_discarded_bytes);
-    (void)ldc_endpoint_get_stats(&g_usb_endpoint, &status->ldc);
+    (void)ldc_easy_get_stats(&g_usb_ldc, &status->ldc);
 }
 
 int fputc(int ch, FILE *f)

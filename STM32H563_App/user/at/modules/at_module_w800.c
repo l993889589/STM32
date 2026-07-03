@@ -41,7 +41,10 @@
 static void w800_log(at_module_t *module, const char *line)
 {
     if(module && module->session && module->session->log && line)
-        module->session->log(line, module->session->log_arg);
+		{
+			module->session->log(line, module->session->log_arg);
+		}
+
 }
 
 /* w800_probe

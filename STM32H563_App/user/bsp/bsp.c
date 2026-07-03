@@ -1,25 +1,27 @@
 #include "bsp.h"
 
 #include <stdio.h>
-#include "spi.h"
-#include "usart.h"
 
 void bsp_init(void)
 {
-    (void)bsp_uart_bind(BSP_UART_W800_AT, &huart1, 1U, 1U);
-    (void)bsp_uart_bind(BSP_UART_RS485, &huart2, 0U, 0U);
-    (void)bsp_uart_bind(BSP_UART_NEARLINK, &huart3, 0U, 0U);
-    (void)gd25lq128_bind(&hspi1);
+    static uint8_t initialized;
+
+    if(initialized != 0U)
+        return;
+
+    (void)bsp_board_init();
 
     (void)bsp_dwt_init();
 
     bsp_timer_init();
     bsp_uart_init();
     bsp_w800_reset_release();
-    bsp_nearlink_reset_release();
     bsp_led_off(BSP_LED_STATUS);
-		bsp_led_init();
+    bsp_led_init();
     (void)bsp_lcd_init();
+    (void)bsp_touch_init();
+
+    initialized = 1U;
 }
 
 void bsp_led_on(bsp_led_t led)
@@ -55,24 +57,6 @@ void bsp_w800_hard_reset(uint32_t assert_ms, uint32_t ready_ms)
     bsp_w800_reset_assert();
     HAL_Delay(assert_ms);
     bsp_w800_reset_release();
-    HAL_Delay(ready_ms);
-}
-
-void bsp_nearlink_reset_assert(void)
-{
-    HAL_GPIO_WritePin(BSP_NEARLINK_RESET_PORT, BSP_NEARLINK_RESET_PIN, GPIO_PIN_RESET);
-}
-
-void bsp_nearlink_reset_release(void)
-{
-    HAL_GPIO_WritePin(BSP_NEARLINK_RESET_PORT, BSP_NEARLINK_RESET_PIN, GPIO_PIN_SET);
-}
-
-void bsp_nearlink_hard_reset(uint32_t assert_ms, uint32_t ready_ms)
-{
-    bsp_nearlink_reset_assert();
-    HAL_Delay(assert_ms);
-    bsp_nearlink_reset_release();
     HAL_Delay(ready_ms);
 }
 

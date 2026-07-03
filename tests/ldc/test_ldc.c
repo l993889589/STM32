@@ -18,6 +18,23 @@ typedef struct
 
 typedef struct
 {
+    ldc_t *ldc;
+    uint64_t entry_rx_bytes;
+    uint64_t max_rx_bytes_in_lock;
+    unsigned int lock_entries;
+    unsigned int lock_depth;
+} atomic_lock_t;
+
+typedef struct
+{
+    ldc_t *ldc;
+    unsigned int lock_depth;
+    unsigned int inject_once;
+    unsigned int injecting;
+} tick_inject_lock_t;
+
+typedef struct
+{
     ldc_t ldc;
     uint8_t ring[257];
     ldc_packet_t packets[16];
@@ -64,6 +81,56 @@ static void test_unlock(void *arg, uint32_t state)
     (void)state;
     CHECK(counts->lock_depth == 1U);
     counts->lock_depth--;
+}
+
+static uint32_t atomic_test_lock(void *arg)
+{
+    atomic_lock_t *lock = (atomic_lock_t *)arg;
+
+    lock->lock_depth++;
+    lock->lock_entries++;
+    lock->entry_rx_bytes = lock->ldc->stats.rx_bytes;
+    return lock->lock_depth;
+}
+
+static void atomic_test_unlock(void *arg, uint32_t state)
+{
+    atomic_lock_t *lock = (atomic_lock_t *)arg;
+    uint64_t delta;
+
+    (void)state;
+    CHECK(lock->lock_depth == 1U);
+
+    delta = lock->ldc->stats.rx_bytes - lock->entry_rx_bytes;
+    if(delta > lock->max_rx_bytes_in_lock)
+        lock->max_rx_bytes_in_lock = delta;
+
+    lock->lock_depth--;
+}
+
+static uint32_t tick_inject_lock(void *arg)
+{
+    tick_inject_lock_t *lock = (tick_inject_lock_t *)arg;
+
+    lock->lock_depth++;
+    return lock->lock_depth;
+}
+
+static void tick_inject_unlock(void *arg, uint32_t state)
+{
+    tick_inject_lock_t *lock = (tick_inject_lock_t *)arg;
+
+    (void)state;
+    CHECK(lock->lock_depth == 1U);
+    lock->lock_depth--;
+
+    if(lock->inject_once != 0U && lock->injecting == 0U)
+    {
+        lock->inject_once = 0U;
+        lock->injecting = 1U;
+        ldc_tick(lock->ldc, 100U);
+        lock->injecting = 0U;
+    }
 }
 
 static void fixture_init(fixture_t *fixture,
@@ -266,6 +333,47 @@ static void test_callbacks_run_after_unlock(void)
     CHECK(fixture.events.lock_depth == 0U);
 }
 
+static void test_default_atomic_write_limit(void)
+{
+    fixture_t fixture;
+    atomic_lock_t lock;
+    uint8_t data[100];
+
+    memset(data, 0xA5, sizeof(data));
+    memset(&lock, 0, sizeof(lock));
+
+    fixture_init(&fixture, 0U, 0U, -1, LDC_MODE_PROTECT);
+    lock.ldc = &fixture.ldc;
+    ldc_set_lock(&fixture.ldc, atomic_test_lock, atomic_test_unlock, &lock);
+
+    CHECK(fixture.ldc.atomic_write_bytes == LDC_DEFAULT_ATOMIC_WRITE_BYTES);
+    CHECK(ldc_write(&fixture.ldc, data, sizeof(data)) == sizeof(data));
+    CHECK(lock.max_rx_bytes_in_lock <= LDC_DEFAULT_ATOMIC_WRITE_BYTES);
+    CHECK(lock.lock_entries >= 4U);
+    CHECK(lock.lock_depth == 0U);
+}
+
+static void test_tick_does_not_split_atomic_write(void)
+{
+    fixture_t fixture;
+    tick_inject_lock_t lock;
+    uint8_t data[100];
+
+    memset(data, 0x5A, sizeof(data));
+    memset(&lock, 0, sizeof(lock));
+
+    fixture_init(&fixture, 0U, 1U, false, 0U);
+    lock.ldc = &fixture.ldc;
+    lock.inject_once = 1U;
+    ldc_set_lock(&fixture.ldc, tick_inject_lock, tick_inject_unlock, &lock);
+
+    CHECK(ldc_write(&fixture.ldc, data, sizeof(data)) == sizeof(data));
+    CHECK(ldc_packet_available(&fixture.ldc) == 0U);
+    ldc_tick(&fixture.ldc, 1U);
+    CHECK(ldc_packet_available(&fixture.ldc) == 1U);
+    CHECK(read_packet(&fixture.ldc, data, sizeof(data)) != 0);
+}
+
 static uint32_t prng_next(uint32_t *state)
 {
     uint32_t x = *state;
@@ -274,6 +382,71 @@ static uint32_t prng_next(uint32_t *state)
     x ^= x << 5;
     *state = x;
     return x;
+}
+
+static void drain_packets(ldc_t *ldc, uint8_t *out, size_t *out_len, size_t out_size)
+{
+    while(ldc_packet_available(ldc) != 0U)
+    {
+        uint8_t frame[160];
+        int length = ldc_read_packet(ldc, frame, sizeof(frame));
+
+        CHECK(length > 0);
+        if(length <= 0)
+            return;
+
+        CHECK(*out_len + (size_t)length <= out_size);
+        if(*out_len + (size_t)length <= out_size)
+        {
+            memcpy(&out[*out_len], frame, (size_t)length);
+            *out_len += (size_t)length;
+        }
+    }
+}
+
+static void test_atomic_split_matches_unsplit(void)
+{
+    uint8_t stream[8192];
+    uint8_t split_out[8192];
+    uint8_t unsplit_out[8192];
+    size_t split_len = 0U;
+    size_t unsplit_len = 0U;
+    fixture_t split;
+    fixture_t unsplit;
+    uint32_t random = 0x31415926U;
+
+    for(size_t i = 0U; i < sizeof(stream); i++)
+    {
+        stream[i] = (uint8_t)('a' + (prng_next(&random) % 26U));
+        if((i % 29U) == 28U)
+            stream[i] = '\n';
+    }
+
+    fixture_init(&split, 128U, 0U, '\n', LDC_MODE_PROTECT);
+    fixture_init(&unsplit, 128U, 0U, '\n', LDC_MODE_PROTECT);
+    ldc_set_atomic_write_bytes(&unsplit.ldc, 0U);
+
+    random = 0x27182818U;
+    for(size_t offset = 0U; offset < sizeof(stream);)
+    {
+        size_t chunk = 1U + (prng_next(&random) % 211U);
+        if(chunk > sizeof(stream) - offset)
+            chunk = sizeof(stream) - offset;
+
+        CHECK(ldc_write(&split.ldc, &stream[offset], (uint32_t)chunk) == chunk);
+        CHECK(ldc_write(&unsplit.ldc, &stream[offset], (uint32_t)chunk) == chunk);
+        offset += chunk;
+
+        drain_packets(&split.ldc, split_out, &split_len, sizeof(split_out));
+        drain_packets(&unsplit.ldc, unsplit_out, &unsplit_len, sizeof(unsplit_out));
+    }
+
+    drain_packets(&split.ldc, split_out, &split_len, sizeof(split_out));
+    drain_packets(&unsplit.ldc, unsplit_out, &unsplit_len, sizeof(unsplit_out));
+
+    CHECK(split.events.packet == unsplit.events.packet);
+    CHECK(split_len == unsplit_len);
+    CHECK(memcmp(split_out, unsplit_out, split_len) == 0);
 }
 
 static void test_random_chunk_invariance(void)
@@ -327,7 +500,7 @@ static void test_random_chunk_invariance(void)
     CHECK(memcmp(actual, expected, actual_len) == 0);
 }
 
-static void benchmark_block_write(void)
+static void benchmark_block_write_case(const char *label, uint32_t atomic_write_bytes)
 {
     fixture_t fixture;
     uint8_t block[256];
@@ -340,6 +513,10 @@ static void benchmark_block_write(void)
 
     memset(block, 0x5AU, sizeof(block));
     fixture_init(&fixture, sizeof(block), 0U, -1, LDC_MODE_PROTECT);
+    if(atomic_write_bytes == 0U)
+        ldc_set_atomic_write_bytes(&fixture.ldc, 0U);
+    else
+        ldc_set_atomic_write_bytes(&fixture.ldc, atomic_write_bytes);
 
     start = clock();
     for(unsigned int i = 0U; i < loops; i++)
@@ -352,10 +529,17 @@ static void benchmark_block_write(void)
     seconds = (double)(stop - start) / (double)CLOCKS_PER_SEC;
     mib_per_second = seconds > 0.0 ?
                      ((double)sizeof(block) * loops / (1024.0 * 1024.0)) / seconds : 0.0;
-    (void)printf("LDC host block baseline: %.2f MiB/s (%u x %u bytes)\n",
+    (void)printf("LDC host %s: %.2f MiB/s (%u x %u bytes)\n",
+                 label,
                  mib_per_second,
                  loops,
                  (unsigned int)sizeof(block));
+}
+
+static void benchmark_block_write(void)
+{
+    benchmark_block_write_case("split-32 write", LDC_DEFAULT_ATOMIC_WRITE_BYTES);
+    benchmark_block_write_case("unsplit write", 0U);
 }
 
 int main(void)
@@ -367,6 +551,9 @@ int main(void)
     test_wrap_and_small_read_retry();
     test_protect_and_overwrite();
     test_callbacks_run_after_unlock();
+    test_default_atomic_write_limit();
+    test_tick_does_not_split_atomic_write();
+    test_atomic_split_matches_unsplit();
     test_random_chunk_invariance();
     benchmark_block_write();
 

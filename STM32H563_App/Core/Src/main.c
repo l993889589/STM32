@@ -31,11 +31,31 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bsp.h"
+#include "ldc_easy.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+//板子上有个显示屏，驱动芯片是ST7796U2  480*320RGB，引脚对应关系如下
 
+//LCD信号		STM32引脚	说明
+//VCC		VCC_3V3		3.3V供电
+//GND		GND		地
+//PWM		PB11		背光亮度控制
+//LCD_RESET	PB4		LCD复位
+//MOSI		PC1 	   	SPI数据输出
+//SCK		PB10		SPI时钟
+//RS (DC)		PD12		数据/命令选择
+//CS		PD11 		SPI片选
+//MISO		PC2		SPI数据输入
+
+//触摸信号	STM32引脚	说明
+//TP_RST	PB14	触摸芯片复位
+//TP_INT	PB15	触摸中断
+//TP_SDA	PB9	I2C数据
+//TP_SCL	PB8	I2C时钟
+
+//要求，按照刚才的BSP规范写出这个屏幕的驱动文件，开机默认点亮，D:\Embedded\cs\H5\STM32H563_App\user\ui这个路径下边有一些picture文件可以用
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -99,7 +119,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  boot_led_hw_init();
+//  boot_led_hw_init();
 
   /* USER CODE END Init */
 
@@ -107,7 +127,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-	
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -119,14 +139,31 @@ int main(void)
   MX_USART3_UART_Init();
   MX_SPI1_Init();
   MX_USART2_UART_Init();
+  MX_UART4_Init();
   /* USER CODE BEGIN 2 */
   HAL_PWREx_EnableVddUSB();
 	bsp_init();
-	
-	
-	bsp_dwt_delay_ms(1000);
+
+
+	bsp_dwt_delay_ms(200);
 	bsp_ledn_toggle(0);
-	bsp_dwt_delay_ms(1000);
+	bsp_dwt_delay_ms(200);
+	bsp_ledn_toggle(0);
+
+	bsp_dwt_delay_ms(200);
+	bsp_ledn_toggle(0);
+	bsp_dwt_delay_ms(200);
+	bsp_ledn_toggle(0);
+
+
+	bsp_dwt_delay_ms(200);
+	bsp_ledn_toggle(0);
+	bsp_dwt_delay_ms(200);
+	bsp_ledn_toggle(0);
+
+	bsp_dwt_delay_ms(200);
+	bsp_ledn_toggle(0);
+	bsp_dwt_delay_ms(200);
 	bsp_ledn_toggle(0);
   /* USER CODE END 2 */
 
@@ -238,6 +275,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM17)
   {
     HAL_IncTick();
+    ldc_easy_tick_all(1U);
   }
   /* USER CODE BEGIN Callback 1 */
 

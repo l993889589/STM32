@@ -25,11 +25,9 @@
 /* USER CODE BEGIN Includes */
 #include "app_board_io.h"
 #include "app_config.h"
-#include "app_msg_bus_service.h"
 #include "app_ota.h"
-#include "app_nearlink.h"
 #include "app_ui.h"
-
+#include "app_debug.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,26 +51,36 @@ static TX_THREAD app_rs485_thread;
 static TX_THREAD app_led_thread;
 static TX_THREAD app_w800_thread;
 static TX_THREAD app_ota_confirm_thread;
-static TX_THREAD app_nearlink_thread;
 static TX_THREAD app_ui_thread;
-#if APP_ENABLE_MSG_BUS
-static TX_THREAD app_msg_bus_thread;
-#endif
-static UCHAR app_rs485_thread_stack[1024];
+static TX_THREAD app_tick_thread;
+static UCHAR app_rs485_thread_stack[2048];
 static UCHAR app_led_thread_stack[512];
-static UCHAR app_w800_thread_stack[4096];
+static UCHAR app_tick_thread_stack[512];
+static UCHAR app_w800_thread_stack[8192];
 static UCHAR app_ota_confirm_thread_stack[2048];
-static UCHAR app_nearlink_thread_stack[3072];
 static UCHAR app_ui_thread_stack[6144];
-#if APP_ENABLE_MSG_BUS
-static UCHAR app_msg_bus_thread_stack[2048];
-#endif
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
+void app_tick_task_entry(ULONG thread_input)
+{
+    (void)thread_input;
+    for(;;)
+    {
+//        HAL_GPIO_TogglePin(LED_R_GPIO_Port,LED_R_Pin);
+        tx_thread_sleep(1);;
+    }
+}
 
+static volatile TX_THREAD *g_stack_error_thread;
+
+static void app_threadx_stack_error_handler(TX_THREAD *thread_ptr)
+{
+    g_stack_error_thread = thread_ptr;
+    (void)thread_ptr;
+}
 /* USER CODE END PFP */
 
 /**
@@ -88,6 +96,19 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
 
   /* USER CODE END App_ThreadX_MEM_POOL */
   /* USER CODE BEGIN App_ThreadX_Init */
+  (void)tx_thread_stack_error_notify(app_threadx_stack_error_handler);
+//	  if(tx_thread_create(&app_tick_thread, "timer tick",
+//                      app_tick_task_entry, 0U,
+//                      app_tick_thread_stack, sizeof(app_tick_thread_stack),
+//                      1U, 1U,
+//                      TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
+//  {
+//    return TX_THREAD_ERROR;
+//  }
+
+
+
+
   if(tx_thread_create(&app_led_thread, "LED Blink",
                       app_led_task_entry, 0U,
                       app_led_thread_stack, sizeof(app_led_thread_stack),
@@ -109,18 +130,13 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
     return ret;
   }
 
-#if APP_ENABLE_MSG_BUS
-  if(tx_thread_create(&app_msg_bus_thread, "App Message Bus",
-                      app_msg_bus_task_entry, 0U,
-                      app_msg_bus_thread_stack, sizeof(app_msg_bus_thread_stack),
-                      11U, 11U,
-                      TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
+  ret = app_debug_init();
+  if(ret != TX_SUCCESS)
   {
-    return TX_THREAD_ERROR;
+    return ret;
   }
-#endif
 
-  if(tx_thread_create(&app_rs485_thread, "RS485 Modbus Slave",
+  if(tx_thread_create(&app_rs485_thread, "RS485 Modbus Master",
                       app_rs485_task_entry, 0U,
                       app_rs485_thread_stack, sizeof(app_rs485_thread_stack),
                       12U, 12U,
@@ -133,15 +149,6 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
                       app_w800_task_entry, 0U,
                       app_w800_thread_stack, sizeof(app_w800_thread_stack),
                       14U, 14U,
-                      TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
-  {
-    return TX_THREAD_ERROR;
-  }
-
-  if(tx_thread_create(&app_nearlink_thread, "NearLink AT",
-                      app_nearlink_task_entry, 0U,
-                      app_nearlink_thread_stack, sizeof(app_nearlink_thread_stack),
-                      13U, 13U,
                       TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
   {
     return TX_THREAD_ERROR;

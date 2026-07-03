@@ -4,26 +4,11 @@
 
 #include "dcache.h"
 
-typedef struct
-{
-    UART_HandleTypeDef *handle;
-    uint8_t use_dma;
-    uint8_t cache_invalidate;
-    uint8_t *rx_buf;
-    uint16_t rx_size;
-    bsp_uart_rx_cb_t rx_cb;
-    void *rx_arg;
-    uint32_t rx_events;
-} bsp_uart_desc_t;
 
-static bsp_uart_desc_t g_uart_desc[BSP_UART_COUNT] =
-{
-    [BSP_UART_W800_AT] = {0},
-    [BSP_UART_RS485] = {0},
-    [BSP_UART_NEARLINK] = {0},
-};
 
-static bsp_uart_desc_t *bsp_uart_get_desc(bsp_uart_port_t port)
+static bsp_uart_desc_t g_uart_desc[BSP_UART_COUNT];
+
+bsp_uart_desc_t *bsp_uart_get_desc(bsp_uart_port_t port)
 {
     if(port >= BSP_UART_COUNT)
         return NULL;
@@ -68,6 +53,20 @@ static int bsp_uart_restart_rx(bsp_uart_desc_t *desc)
     return (status == HAL_OK) ? 0 : -1;
 }
 
+int bsp_uart_start_rx_byte(bsp_uart_port_t port)
+{
+    bsp_uart_desc_t *desc = bsp_uart_get_desc(port);
+
+    if(!desc)
+        return -1;
+
+    desc->rx_buf = &desc->rx_byte;
+    desc->rx_size = 1U;
+    desc->rx_byte_mode = 1U;
+    return bsp_uart_restart_rx(desc);
+}
+
+
 int bsp_uart_bind(bsp_uart_port_t port, UART_HandleTypeDef *handle, uint8_t use_dma, uint8_t cache_invalidate)
 {
     bsp_uart_desc_t *desc = bsp_uart_get_desc(port);
@@ -79,6 +78,16 @@ int bsp_uart_bind(bsp_uart_port_t port, UART_HandleTypeDef *handle, uint8_t use_
     desc->use_dma = use_dma ? 1U : 0U;
     desc->cache_invalidate = cache_invalidate ? 1U : 0U;
     return 0;
+}
+
+uint8_t bsp_uart_rx_uses_dma(bsp_uart_port_t port)
+{
+    bsp_uart_desc_t *desc = bsp_uart_get_desc(port);
+
+    if(!desc || !desc->handle || !desc->handle->hdmarx)
+        return 0U;
+
+    return desc->use_dma ? 1U : 0U;
 }
 
 void bsp_uart_init(void)

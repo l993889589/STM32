@@ -21,6 +21,13 @@ function Invoke-TestSuite {
     )
 
     $Build = Join-Path $Root "build\host-tests-$Name"
+    $Cache = Join-Path $Build "CMakeCache.txt"
+    if(Test-Path $Cache) {
+        $CacheHome = Select-String -Path $Cache -Pattern "^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$" -ErrorAction SilentlyContinue
+        if($CacheHome -and $CacheHome.Matches[0].Groups[1].Value -ne (Resolve-Path $Source).Path) {
+            Remove-Item -LiteralPath $Build -Recurse -Force
+        }
+    }
     Write-Host "Configuring $Name tests..."
     & cmake -S $Source -B $Build -G "Visual Studio 17 2022" -A x64
     if($LASTEXITCODE -ne 0) { throw "$Name configure failed" }
@@ -35,10 +42,9 @@ function Invoke-TestSuite {
 }
 
 Invoke-TestSuite -Name "ldc" -Source (Join-Path $Root "tests\ldc")
-Invoke-TestSuite -Name "msg_bus" -Source (Join-Path $Root "tests\msg_bus")
 Invoke-TestSuite -Name "at" -Source (Join-Path $Root "tests\at")
 Invoke-TestSuite -Name "modbus" -Source (Join-Path $Root "STM32H563_App\user\libmodbus\tests")
 Invoke-TestSuite -Name "usb" -Source (Join-Path $Root "STM32H563_App\user\usb\tests")
-Invoke-TestSuite -Name "shell" -Source (Join-Path $Root "shared\shell\tests")
+Invoke-TestSuite -Name "shell" -Source (Join-Path $Root "STM32H563_App\user\shell\tests")
 
 Write-Host "All host communication tests passed."

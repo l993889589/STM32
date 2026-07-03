@@ -4,10 +4,16 @@
 #include "ota_layout.h"
 #include <string.h>
 
+#define APP_ENABLE_OTA_LOG 0U
+
 static void app_ota_log(const char *line)
 {
+#if APP_ENABLE_OTA_LOG
     if(line)
         (void)app_usb_cdc_write((const uint8_t *)line, (uint32_t)strlen(line));
+#else
+    (void)line;
+#endif
 }
 
 static uint32_t app_ota_crc32_update(uint32_t crc, const uint8_t *data, uint32_t len)

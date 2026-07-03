@@ -65,7 +65,7 @@ Message Bus 的额外成本主要是：
 ## 当前实现位置
 
 ```text
-shared/comm/msg_bus/
+Message Bus removed from active H563 app
   app_msg_bus.c
   app_msg_bus.h
 

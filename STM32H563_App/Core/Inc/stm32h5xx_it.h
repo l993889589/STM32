@@ -58,6 +58,7 @@ void SPI1_IRQHandler(void);
 void USART1_IRQHandler(void);
 void USART2_IRQHandler(void);
 void USART3_IRQHandler(void);
+void UART4_IRQHandler(void);
 void TIM17_IRQHandler(void);
 void USB_DRD_FS_IRQHandler(void);
 /* USER CODE BEGIN EFP */

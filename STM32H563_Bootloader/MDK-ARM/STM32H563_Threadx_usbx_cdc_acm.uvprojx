@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>TX_INCLUDE_USER_DEFINE_FILE,TX_SINGLE_MODE_NON_SECURE=1,UX_INCLUDE_USER_DEFINE_FILE,USE_HAL_DRIVER,STM32H563xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../AZURE_RTOS/App;../USBX/App;../USBX/Target;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/threadx/common/inc;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Middlewares/ST/threadx/ports/cortex_m33/ac6/inc;../Middlewares/ST/usbx/common/core/inc;../Middlewares/ST/usbx/ports/generic/inc;../Middlewares/ST/usbx/common/usbx_stm32_device_controllers;../Middlewares/ST/usbx/common/usbx_device_classes/inc;../Drivers/CMSIS/Include;../user;../user/ldc</IncludePath>
+              <IncludePath>../Core/Inc;../AZURE_RTOS/App;../USBX/App;../USBX/Target;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/threadx/common/inc;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Middlewares/ST/threadx/ports/cortex_m33/ac6/inc;../Middlewares/ST/usbx/common/core/inc;../Middlewares/ST/usbx/ports/generic/inc;../Middlewares/ST/usbx/common/usbx_stm32_device_controllers;../Middlewares/ST/usbx/common/usbx_device_classes/inc;../Drivers/CMSIS/Include;../user;../user/ldc;../user/shell</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -358,7 +358,7 @@
               <MiscControls></MiscControls>
               <Define>TX_SINGLE_MODE_NON_SECURE=1</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../AZURE_RTOS/App;../USBX/App;../USBX/Target;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/threadx/common/inc;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Middlewares/ST/threadx/ports/cortex_m33/ac6/inc;../Middlewares/ST/usbx/common/core/inc;../Middlewares/ST/usbx/ports/generic/inc;../Middlewares/ST/usbx/common/usbx_stm32_device_controllers;../Middlewares/ST/usbx/common/usbx_device_classes/inc;../Drivers/CMSIS/Include;../user;..\user\ldc</IncludePath>
+              <IncludePath>../Core/Inc;../AZURE_RTOS/App;../USBX/App;../USBX/Target;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/threadx/common/inc;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Middlewares/ST/threadx/ports/cortex_m33/ac6/inc;../Middlewares/ST/usbx/common/core/inc;../Middlewares/ST/usbx/ports/generic/inc;../Middlewares/ST/usbx/common/usbx_stm32_device_controllers;../Middlewares/ST/usbx/common/usbx_device_classes/inc;../Drivers/CMSIS/Include;../user;..\user\ldc;../user/shell</IncludePath>
             </VariousControls>
           </Aads>
           <LDads>
@@ -804,6 +804,26 @@
               <FileName>ota_layout.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\ota_layout.h</FilePath>
+            </File>
+            <File>
+              <FileName>boot_shell.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\boot_shell.c</FilePath>
+            </File>
+            <File>
+              <FileName>boot_shell.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\boot_shell.h</FilePath>
+            </File>
+            <File>
+              <FileName>shell.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\shell\shell.c</FilePath>
+            </File>
+            <File>
+              <FileName>shell.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\shell\shell.h</FilePath>
             </File>
             <File>
               <FileName>ldc_core.c</FileName>

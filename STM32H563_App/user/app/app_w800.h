@@ -18,5 +18,8 @@ UINT app_w800_init(void);
 void app_w800_task_entry(ULONG thread_input);
 void app_w800_get_status(app_w800_status_t *status);
 void app_w800_request_reconnect(void);
+const char *app_w800_wifi_ssid(void);
+const char *app_w800_mqtt_host(void);
+uint16_t app_w800_mqtt_port(void);
 
 #endif

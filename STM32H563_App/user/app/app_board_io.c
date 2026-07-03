@@ -2,13 +2,12 @@
 
 #include <stdio.h>
 
-#include "app_config.h"
-#include "app_msg_bus_service.h"
-#include "app_nearlink.h"
 #include "app_rs485.h"
 #include "app_usb_service.h"
 #include "app_w800.h"
 #include "bsp.h"
+
+#define APP_LED_TOGGLE_TICKS 1000U
 
 static uint8_t g_initialized;
 
@@ -18,11 +17,10 @@ UINT app_board_io_init(void)
         return TX_SUCCESS;
 
     bsp_init();
-    if(app_msg_bus_service_init() != TX_SUCCESS ||
-       app_usb_service_init() != TX_SUCCESS ||
+    if(app_usb_service_init() != TX_SUCCESS ||
        app_rs485_init() != TX_SUCCESS ||
-       app_w800_init() != TX_SUCCESS ||
-       app_nearlink_init() != TX_SUCCESS)
+       app_w800_init() != TX_SUCCESS
+       )
         return TX_START_ERROR;
 
     g_initialized = 1U;

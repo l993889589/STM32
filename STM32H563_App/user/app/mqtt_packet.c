@@ -78,3 +78,27 @@ uint16_t mqtt_build_publish(uint8_t *out, uint16_t max_len, const char *topic, c
 
     return (uint16_t)pos;
 }
+
+uint16_t mqtt_build_subscribe(uint8_t *out, uint16_t max_len, uint16_t packet_id, const char *topic, uint8_t qos)
+{
+    uint32_t topic_len;
+    uint32_t remaining;
+    uint32_t pos = 0U;
+
+    if(!out || !topic || qos > 2U)
+        return 0U;
+
+    topic_len = (uint32_t)strlen(topic);
+    remaining = 2U + 2U + topic_len + 1U;
+    if(max_len < (remaining + 5U))
+        return 0U;
+
+    out[pos++] = 0x82U;
+    pos += mqtt_write_remaining_length(&out[pos], remaining);
+    out[pos++] = (uint8_t)(packet_id >> 8);
+    out[pos++] = (uint8_t)(packet_id & 0xFFU);
+    pos += mqtt_write_utf8(&out[pos], topic);
+    out[pos++] = qos;
+
+    return (uint16_t)pos;
+}

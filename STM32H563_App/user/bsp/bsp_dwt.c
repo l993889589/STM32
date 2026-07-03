@@ -1,3 +1,14 @@
+/*
+ * DWT cycle counter helper.
+ *
+ * bsp_dwt_init() enables CYCCNT during BSP startup. Use bsp_dwt_get_cycle()
+ * when raw cycle deltas are needed, or bsp_dwt_get_us() when a monotonic
+ * microsecond timestamp is required by higher layers. The RS485 LDC service
+ * uses bsp_dwt_get_us() to measure Modbus RTU silent gaps.
+ *
+ * Delay helpers are busy-wait utilities for short board bring-up delays. Do
+ * not use them for long waits inside application tasks.
+ */
 #include "bsp_dwt.h"
 
 #include "main.h"
@@ -38,6 +49,16 @@ uint32_t bsp_dwt_get_cycle(void)
 #else
     return 0U;
 #endif
+}
+
+uint32_t bsp_dwt_get_us(void)
+{
+    uint32_t clock = SystemCoreClock;
+
+    if(clock == 0U)
+        return 0U;
+
+    return (uint32_t)(((uint64_t)bsp_dwt_get_cycle() * 1000000ULL) / (uint64_t)clock);
 }
 
 uint32_t bsp_dwt_elapsed_cycles(uint32_t start)
