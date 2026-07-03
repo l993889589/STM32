@@ -1,0 +1,66 @@
+# Keil / ARM build output
+Objects/
+Listings/
+*.o
+*.d
+*.crf
+*.axf
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+*.dep
+*.build_log.htm
+*.htm
+*.uvguix.*
+
+# IDE / local state
+.vs/
+.agents/
+.vscode/ipch/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# CubeMX / generated backup noise
+Backup/
+*.bak
+
+# Python / tools cache
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Packaged desktop tools / downloaded runtimes
+dist/
+release/
+release-*/
+win-unpacked/
+*.asar
+*.exe
+*.dll
+*.zip
+
+# Temporary and local files
+tmp/
+temp/
+*.log
+.DS_Store
+Thumbs.db
+
+# Large reference material excluded from source repo
+*.pdf
+*.xls
+*.xlsx
+*.doc
+*.docx
+*.ppt
+*.pptx
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp

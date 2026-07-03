@@ -1,0 +1,5 @@
+适用于 .NET Framework MSBuild 版本 17.14.23+b0019275e
+
+  lvgl.vcxproj -> D:\Embedded\H5\lvgl_simulator\build\lib\Release\lvgl.lib
+LINK : fatal error LNK1104: 无法打开文件“D:\Embedded\H5\lvgl_simulator\build\Release\lvgl_simulator.exe” [D:\Embedded\H5\lvgl_simulator\build\lvgl_simulator.vcxproj]
+  lvgl_thorvg.vcxproj -> D:\Embedded\H5\lvgl_simulator\build\lib\Release\lvgl_thorvg.lib

@@ -1,0 +1,19 @@
+* text=auto
+
+*.c text eol=crlf
+*.h text eol=crlf
+*.s text eol=crlf
+*.S text eol=crlf
+*.ld text eol=crlf
+*.sct text eol=crlf
+*.ioc text eol=crlf
+*.uvprojx text eol=crlf
+*.uvoptx text eol=crlf
+*.mxproject text eol=crlf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.md text eol=lf
+*.txt text eol=lf
+*.rst text eol=lf

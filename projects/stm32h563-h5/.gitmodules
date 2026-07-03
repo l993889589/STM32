@@ -1,0 +1,3 @@
+[submodule "STM32H563_App/user/ui/lvgl/lvgl"]
+	path = STM32H563_App/user/ui/lvgl/lvgl
+	url = https://github.com/lvgl/lvgl.git
