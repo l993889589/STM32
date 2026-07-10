@@ -806,6 +806,16 @@
               <FilePath>..\user\ota_layout.h</FilePath>
             </File>
             <File>
+              <FileName>ota_boot_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\shared\ota\ota_boot_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_boot_control.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\shared\ota\ota_boot_control.h</FilePath>
+            </File>
+            <File>
               <FileName>boot_shell.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\boot_shell.c</FilePath>
