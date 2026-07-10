@@ -3,6 +3,8 @@
 ota_package/
 build/
 tmp/
+artifacts/
+reference/
 md files/
 rules/
 system-interface-doc.pdf
@@ -18,6 +20,7 @@ tools/*.out.log
 **/MDK-ARM/build_log.txt
 **/MDK-ARM/STM32H563_Threadx_usbx_cdc_acm/
 **/*.uvguix.*
+**/*.uvoptx
 **/*.scvd
 **/*.dep
 **/*.d
@@ -32,9 +35,10 @@ tools/*.out.log
 **/*.lnp
 **/*.crf
 build/tests/
+STM32H563_Bootloader/MDK-ARM/DebugConfig/
+STM32H563_Bootloader/MDK-ARM/RTE/
 
 # Node / Electron generated files
-desktop-debug-assistant/
 **/node_modules/
 **/dist/
 **/release/
@@ -46,6 +50,10 @@ desktop-debug-assistant/
 **/release-shell-final/
 **/release-shell-ready/
 **/release-next/
+
+# Simulator generated files
+simulators/lvgl/build/
+simulators/lvgl/build_output.txt
 
 # Local nested scratch repository
 stm32-h563/

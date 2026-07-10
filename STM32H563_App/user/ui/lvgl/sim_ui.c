@@ -2,7 +2,7 @@
  * Reference-image based LVGL pages.
  *
  * This UI keeps the boot eye animation, then shows the five reference pictures
- * from D:/Embedded/H5/pic as full-screen LVGL image pages. The pictures remain
+ * from assets/ui/source as full-screen LVGL image pages. The pictures remain
  * the base artwork; only numeric slots are covered with small dark value fields
  * and refreshed from sim_data_t.
  *

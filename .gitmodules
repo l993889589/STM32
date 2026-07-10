@@ -1,3 +1,6 @@
 [submodule "STM32H563_App/user/ui/lvgl/lvgl"]
 	path = STM32H563_App/user/ui/lvgl/lvgl
 	url = https://github.com/lvgl/lvgl.git
+[submodule "desktop-debug-assistant"]
+	path = desktop-debug-assistant
+	url = https://github.com/l993889589/desktop-debug-assistant.git

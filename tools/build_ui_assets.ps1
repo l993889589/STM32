@@ -8,7 +8,7 @@ param(
 
   Purpose:
     Build the external-Flash UI asset package from the reference images under
-    D:\Embedded\H5\pic. The default mode clears static numeric/text values from
+    assets\ui\source. The default mode clears static numeric/text values from
     dynamic data regions so the firmware overlay can redraw live values without
     ghosting over values baked into the reference pictures.
 
@@ -28,7 +28,7 @@ Add-Type -AssemblyName System.Drawing
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
-$PicDir = Join-Path $Root "pic"
+$PicDir = Join-Path $Root "assets\ui\source"
 $OutDir = Join-Path $Root "build\ui_assets"
 $OutBin = Join-Path $OutDir "ui_assets.bin"
 $OutManifest = Join-Path $OutDir "ui_assets_manifest.json"
