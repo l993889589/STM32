@@ -6,9 +6,16 @@ tmp/
 md files/
 rules/
 system-interface-doc.pdf
+tools/logs/
+tools/downloads/
+tools/__pycache__/
+tools/*.log
+tools/*.err.log
+tools/*.out.log
 
 # Keil / Arm build outputs and local IDE state
 **/MDK-ARM/*.log
+**/MDK-ARM/build_log.txt
 **/MDK-ARM/STM32H563_Threadx_usbx_cdc_acm/
 **/*.uvguix.*
 **/*.scvd
@@ -24,6 +31,7 @@ system-interface-doc.pdf
 **/*.lst
 **/*.lnp
 **/*.crf
+build/tests/
 
 # Node / Electron generated files
 desktop-debug-assistant/
