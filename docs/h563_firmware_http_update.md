@@ -29,9 +29,12 @@ rejects a sidecar whose size or CRC differs from the binary.
   "host": "192.168.1.4",
   "port": 8088,
   "path": "/firmware/app.bin",
-  "version": 2026071016,
-  "size": 858240,
-  "crc32": 3985416706,
+  "version": 2026071017,
+  "size": 860480,
+  "crc32": 127781372,
+  "imageFlags": 2,
+  "sha256": "29A77359ECD2EEF8BC484900B21624E19309DA3D5A8321AE5F6A50F9752D39BA",
+  "signature": "<128 hex characters: raw P-256 r||s>",
   "entryAddress": 134349885,
   "chunkSize": 4096
 }
@@ -41,7 +44,20 @@ The application validates the entry address against internal App flash, chooses
 the non-active external firmware slot, and stores only slot-relative offsets.
 Each response block must match its Range CRC. After the final block, the shared
 transaction rereads the complete external image, validates the image CRC, and
-atomically transitions `VERIFIED -> PENDING`.
+validates SHA-256 before it atomically transitions `VERIFIED -> PENDING`. Boot
+re-hashes the selected external slot and verifies the signed descriptor with
+the compiled P-256 public key before touching internal App flash.
+
+The desktop assistant also exposes a loopback-only acceptance endpoint:
+
+```text
+POST   /__test/http-fault?mode=status&afterOffset=4096&count=1
+DELETE /__test/http-fault
+```
+
+It is not reachable from LAN clients. `tools/test_desktop_firmware_http.ps1`
+uses it to prove that a failed Range does not advance the download and that the
+same Range succeeds on retry with an identical CRC.
 
 ## USB Protocol
 

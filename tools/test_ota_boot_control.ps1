@@ -35,8 +35,14 @@ if($LASTEXITCODE -ne 0)
     throw "Host OTA boot-control test build failed with exit code $LASTEXITCODE"
 }
 
-& $Executable
-if($LASTEXITCODE -ne 0)
+$Output = & $Executable 2>&1
+$ExitCode = $LASTEXITCODE
+$Output | ForEach-Object { Write-Host $_ }
+if($ExitCode -ne 0)
 {
-    throw "Host OTA boot-control tests failed with exit code $LASTEXITCODE"
+    throw "Host OTA boot-control tests failed with exit code $ExitCode"
+}
+if(($Output -join "`n") -notmatch "ota_boot_control: all tests passed")
+{
+    throw "Host OTA boot-control test executable did not report successful execution"
 }

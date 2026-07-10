@@ -83,3 +83,10 @@ uint8_t app_health_is_ready(
             (snapshot.seen_mask & snapshot.required_mask) == snapshot.required_mask &&
             snapshot.stale_mask == 0U) ? 1U : 0U;
 }
+
+void app_health_get_status(
+    ULONG stale_limit_ticks,
+    app_health_status_t *status)
+{
+    (void)app_health_is_ready(0U, stale_limit_ticks, status);
+}

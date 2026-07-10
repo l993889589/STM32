@@ -12,12 +12,12 @@ complete only when its stated tests and evidence are recorded here.
 | 2. Power-safe metadata | Complete | 348 torn-write offsets; one-copy read failure; dual ARM builds |
 | 3. Persistent firmware A/B | Complete | Incomplete/corrupt candidate preserves active slot; LDOT v2 |
 | 4. Boot install and rollback | Complete | INSTALLING retry, 3-attempt trial rollback, v1 migration tests |
-| 5. App download and health confirmation | In progress | HTTP Range compiled; live server/board test pending |
-| 6. Independent USB recovery | Pending | Recovery from erased internal App |
-| 7. Signature and anti-rollback | Pending | Tamper and downgrade rejection tests |
-| 8. Diagnostics | Pending | Reset/update/slot/error query evidence |
-| 9. Fault injection | Pending | Host and hardware matrix complete |
-| 10. Production release | Pending | Factory package, runbook and GitHub release state |
+| 5. App download and health confirmation | Complete | 4 KiB Range, block/whole CRC, SHA-256 and health-gated confirmation |
+| 6. Independent USB recovery | Complete | Boot LDOT v2 parser is binary-safe and host fragmentation-tested |
+| 7. Signature and anti-rollback | Complete | P-256 package, Boot PKA verifier, tamper/downgrade tests, WRP policy |
+| 8. Diagnostics | Complete | Boot/App shell and MQTT expose slot, health, reset and control errors |
+| 9. Fault injection | In progress | Host matrix complete; final board install/trial observation pending |
+| 10. Production release | In progress | Reproducible release tool/runbook added; final GitHub push pending |
 
 ## Current Decisions
 
@@ -28,6 +28,18 @@ complete only when its stated tests and evidence are recorded here.
 - MQTT carries commands and low-rate status; HTTP Range carries firmware data.
 - Bootloader network update and delta firmware are outside the first scope.
 - New project-owned files and public functions require purpose and usage comments.
+
+## Verified Build And Test Evidence
+
+- Boot: Code 93402, RO 2910, RW 120, ZI 40136; 0 errors, 0 warnings.
+- App: Code 461064, RO 400100, RW 2048, ZI 385152; 0 errors, 0 warnings.
+- Metadata: every one of 348 interrupted write positions preserves a valid copy.
+- Firmware transaction: incomplete, out-of-order, CRC-failed and SHA-failed images
+  never become pending or overwrite the active slot.
+- HTTP: signed manifest, 4096-byte Range CRC, injected 503 and retry all pass.
+- Signature: valid package passes; changed signed metadata and changed image fail.
+- Boot policy: interrupted install retries, invalid candidate restores active image,
+  and an unconfirmed trial rolls back after three boot attempts.
 
 ## Commit Policy
 

@@ -5,6 +5,7 @@
  * is driven by the caller's task; no callback executes from interrupt context.
  */
 #include "ota_firmware_update.h"
+#include "ota_sha256.h"
 #include <string.h>
 
 static uint32_t ota_firmware_update_crc32(uint32_t crc, const uint8_t *data, uint32_t size)
@@ -130,9 +131,10 @@ ota_firmware_update_status_t ota_firmware_update_init(
     return OTA_FIRMWARE_UPDATE_OK;
 }
 
-ota_firmware_update_status_t ota_firmware_update_begin(
+static ota_firmware_update_status_t ota_firmware_update_begin_internal(
     ota_firmware_update_t *update,
-    const ota_firmware_descriptor_t *descriptor)
+    const ota_firmware_descriptor_t *descriptor,
+    uint8_t recovery_mode)
 {
     ota_firmware_update_status_t status;
     uint32_t target_slot;
@@ -148,19 +150,36 @@ ota_firmware_update_status_t ota_firmware_update_begin(
     }
 
     status = ota_firmware_update_load_control(update);
+    if(status == OTA_FIRMWARE_UPDATE_NOT_PROVISIONED && recovery_mode != 0U)
+    {
+        ota_boot_control_init(&update->control);
+        status = OTA_FIRMWARE_UPDATE_OK;
+    }
     if(status != OTA_FIRMWARE_UPDATE_OK)
     {
         return status;
     }
 
-    if(update->control.state != (uint32_t)OTA_CONTROL_STATE_CONFIRMED &&
+    if(recovery_mode == 0U &&
+       update->control.state != (uint32_t)OTA_CONTROL_STATE_CONFIRMED &&
        update->control.state != (uint32_t)OTA_CONTROL_STATE_DOWNLOADING &&
        update->control.state != (uint32_t)OTA_CONTROL_STATE_VERIFIED)
     {
         return OTA_FIRMWARE_UPDATE_BAD_STATE;
     }
 
-    if(update->control.active_slot != (uint32_t)OTA_FIRMWARE_SLOT_A &&
+    if(recovery_mode != 0U &&
+       update->control.state != (uint32_t)OTA_CONTROL_STATE_EMPTY &&
+       update->control.state != (uint32_t)OTA_CONTROL_STATE_CONFIRMED &&
+       update->control.state != (uint32_t)OTA_CONTROL_STATE_DOWNLOADING &&
+       update->control.state != (uint32_t)OTA_CONTROL_STATE_VERIFIED &&
+       update->control.state != (uint32_t)OTA_CONTROL_STATE_RECOVERY)
+    {
+        return OTA_FIRMWARE_UPDATE_BAD_STATE;
+    }
+
+    if(recovery_mode == 0U &&
+       update->control.active_slot != (uint32_t)OTA_FIRMWARE_SLOT_A &&
        update->control.active_slot != (uint32_t)OTA_FIRMWARE_SLOT_B)
     {
         return OTA_FIRMWARE_UPDATE_NOT_PROVISIONED;
@@ -168,6 +187,10 @@ ota_firmware_update_status_t ota_firmware_update_begin(
 
     target_slot = (update->control.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_A) ?
                   (uint32_t)OTA_FIRMWARE_SLOT_B : (uint32_t)OTA_FIRMWARE_SLOT_A;
+    update->abort_state = (update->control.state == (uint32_t)OTA_CONTROL_STATE_RECOVERY ||
+                           update->control.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_NONE) ?
+                          (uint32_t)OTA_CONTROL_STATE_RECOVERY :
+                          (uint32_t)OTA_CONTROL_STATE_CONFIRMED;
 
     update->control.state = (uint32_t)OTA_CONTROL_STATE_DOWNLOADING;
     update->control.pending_slot = target_slot;
@@ -197,6 +220,20 @@ ota_firmware_update_status_t ota_firmware_update_begin(
 
     update->is_active = 1U;
     return OTA_FIRMWARE_UPDATE_OK;
+}
+
+ota_firmware_update_status_t ota_firmware_update_begin(
+    ota_firmware_update_t *update,
+    const ota_firmware_descriptor_t *descriptor)
+{
+    return ota_firmware_update_begin_internal(update, descriptor, 0U);
+}
+
+ota_firmware_update_status_t ota_firmware_update_begin_recovery(
+    ota_firmware_update_t *update,
+    const ota_firmware_descriptor_t *descriptor)
+{
+    return ota_firmware_update_begin_internal(update, descriptor, 1U);
 }
 
 ota_firmware_update_status_t ota_firmware_update_write(
@@ -261,6 +298,8 @@ ota_firmware_update_status_t ota_firmware_update_write(
 ota_firmware_update_status_t ota_firmware_update_finish(ota_firmware_update_t *update)
 {
     ota_firmware_update_status_t status;
+    ota_sha256_context_t sha256;
+    uint8_t image_sha256[OTA_SHA256_DIGEST_SIZE];
     uint32_t crc = 0U;
     uint32_t offset = 0U;
 
@@ -274,6 +313,7 @@ ota_firmware_update_status_t ota_firmware_update_finish(ota_firmware_update_t *u
         return OTA_FIRMWARE_UPDATE_SEQUENCE;
     }
 
+    ota_sha256_init(&sha256);
     while(offset < update->expected_size)
     {
         uint32_t chunk = update->expected_size - offset;
@@ -292,8 +332,11 @@ ota_firmware_update_status_t ota_firmware_update_finish(ota_firmware_update_t *u
         }
 
         crc = ota_firmware_update_crc32(crc, update->verify_buffer, chunk);
+        ota_sha256_update(&sha256, update->verify_buffer, chunk);
         offset += chunk;
     }
+
+    ota_sha256_finish(&sha256, image_sha256);
 
     if(crc != update->expected_crc32)
     {
@@ -301,6 +344,16 @@ ota_firmware_update_status_t ota_firmware_update_finish(ota_firmware_update_t *u
         update->control.last_error_address = update->target_address;
         (void)ota_firmware_update_store_control(update);
         return OTA_FIRMWARE_UPDATE_CRC_MISMATCH;
+    }
+
+    if(memcmp(image_sha256,
+              update->control.slots[update->target_slot].image_sha256,
+              sizeof(image_sha256)) != 0)
+    {
+        update->control.last_error = (uint32_t)OTA_CONTROL_ERROR_IMAGE_SHA256;
+        update->control.last_error_address = update->target_address;
+        (void)ota_firmware_update_store_control(update);
+        return OTA_FIRMWARE_UPDATE_SHA256_MISMATCH;
     }
 
     update->control.slots[update->target_slot].state = (uint32_t)OTA_SLOT_STATE_VERIFIED;
@@ -337,11 +390,6 @@ ota_firmware_update_status_t ota_firmware_update_abort(ota_firmware_update_t *up
         return status;
     }
 
-    if(update->control.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_NONE)
-    {
-        return OTA_FIRMWARE_UPDATE_NOT_PROVISIONED;
-    }
-
     if(update->control.pending_slot != (uint32_t)OTA_FIRMWARE_SLOT_NONE)
     {
         update->control.slots[update->control.pending_slot].state =
@@ -349,7 +397,11 @@ ota_firmware_update_status_t ota_firmware_update_abort(ota_firmware_update_t *up
     }
 
     update->control.pending_slot = (uint32_t)OTA_FIRMWARE_SLOT_NONE;
-    update->control.state = (uint32_t)OTA_CONTROL_STATE_CONFIRMED;
+    update->control.state = (update->control.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_NONE) ?
+                            (uint32_t)OTA_CONTROL_STATE_RECOVERY :
+                            ((update->abort_state == (uint32_t)OTA_CONTROL_STATE_RECOVERY) ?
+                             (uint32_t)OTA_CONTROL_STATE_RECOVERY :
+                             (uint32_t)OTA_CONTROL_STATE_CONFIRMED);
     update->control.last_error = (uint32_t)OTA_CONTROL_ERROR_NONE;
     update->control.last_error_address = 0U;
     status = ota_firmware_update_store_control(update);

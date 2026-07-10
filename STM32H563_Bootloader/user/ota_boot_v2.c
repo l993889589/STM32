@@ -7,6 +7,7 @@
  */
 #include "ota_boot_v2.h"
 #include "ota_boot_private.h"
+#include "boot_security.h"
 #include "../../shared/ota/ota_boot_control.h"
 #include "gd25lq128.h"
 #include <string.h>
@@ -165,10 +166,11 @@ static uint8_t ota_boot_v2_internal_matches_slot(
 }
 
 static uint8_t ota_boot_v2_install_slot(
-    const ota_boot_control_record_t *record,
+    ota_boot_control_record_t *record,
     uint32_t slot)
 {
     const ota_firmware_descriptor_t *descriptor;
+    uint32_t security_error;
 
     if(!ota_boot_v2_slot_descriptor_is_installable(record, slot))
     {
@@ -176,6 +178,12 @@ static uint8_t ota_boot_v2_install_slot(
     }
 
     descriptor = &record->slots[slot];
+    if(!boot_security_verify_slot(record, slot, &security_error))
+    {
+        record->last_error = security_error;
+        record->last_error_address = ota_boot_v2_slot_address(slot);
+        return 0U;
+    }
     return ota_boot_install_external_image(
         ota_boot_v2_slot_address(slot),
         descriptor->image_size,
@@ -243,6 +251,9 @@ ota_boot_result_t ota_boot_v2_process(void)
         return OTA_BOOT_RESULT_NO_UPDATE;
     }
 
+    record.last_reset_reason = ota_boot_reset_reason();
+    record.boot_count++;
+
     switch(record.state)
     {
     case OTA_CONTROL_STATE_CONFIRMED:
@@ -281,7 +292,10 @@ ota_boot_result_t ota_boot_v2_process(void)
            !ota_boot_v2_install_slot(&record, record.pending_slot))
         {
             record.state = (uint32_t)OTA_CONTROL_STATE_ROLLBACK;
-            record.last_error = (uint32_t)OTA_CONTROL_ERROR_INTERNAL_PROGRAM;
+            if(record.last_error == (uint32_t)OTA_CONTROL_ERROR_NONE)
+            {
+                record.last_error = (uint32_t)OTA_CONTROL_ERROR_INTERNAL_PROGRAM;
+            }
             (void)ota_boot_v2_store(&record);
             return ota_boot_v2_rollback(&record);
         }

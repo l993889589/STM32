@@ -6,6 +6,8 @@
 
 #include "app_board_io.h"
 #include "app_config.h"
+#include "app_firmware_update_service.h"
+#include "app_health.h"
 #include "app_log.h"
 #include "app_rs485.h"
 #include "app_ui.h"
@@ -14,8 +16,12 @@
 #include "ldc_easy.h"
 #include "ldc_port_irq.h"
 #include "main.h"
+#include "gd25lq128.h"
+#include "../../../shared/ota/ota_boot_control.h"
+#include "ota_layout.h"
 #include "shell.h"
 #include "tx_api.h"
+#include "ui_asset_store.h"
 
 #ifndef TX_TIMER_TICKS_PER_SECOND
 #define TX_TIMER_TICKS_PER_SECOND 1000U
@@ -267,17 +273,83 @@ static int app_shell_cmd_mqtt(shell_t *shell, int argc, char **argv, void *arg)
     }
 
     app_board_get_status(&status);
-    (void)shell_printf(shell, "mqtt %s, broker=%s:%u, socket=%d\r\n",
+    (void)shell_printf(shell,
+                       "mqtt %s, broker=%s:%u, socket=%d state=%u stage=%u local=%u rx=%lu rres=%u ract=%u rfail=%lu rb=%02X%02X%02X%02X pub=%lu begin=%lu chunk=%lu commit=%lu drops=%lu last=%s/%u http=%u/%u state=%u %lu/%lu err=%s ui_chunk=%u state=%u %lu/%lu unit=%u retry=%u seen=%lu drop=%lu seq=%lu ofs=%lu b64=%lu crc=%lu err=%s\r\n",
                        status.mqtt_online ? "online" : "offline",
                        app_w800_mqtt_host(),
                        (unsigned int)app_w800_mqtt_port(),
-                       status.w800_socket_id);
+                       status.w800_socket_id,
+                       status.w800_state,
+                       status.w800_mqtt_stage,
+                       (unsigned int)status.w800_socket_local_port,
+                       (unsigned long)status.w800_socket_rx_data,
+                       status.w800_socket_recv_result,
+                       (unsigned int)status.w800_socket_recv_actual,
+                       (unsigned long)status.w800_socket_recv_fail_count,
+                       status.w800_socket_recv_head[0],
+                       status.w800_socket_recv_head[1],
+                       status.w800_socket_recv_head[2],
+                       status.w800_socket_recv_head[3],
+                       (unsigned long)status.w800_mqtt_publish_seen,
+                       (unsigned long)status.w800_mqtt_begin_seen,
+                       (unsigned long)status.w800_mqtt_chunk_seen,
+                       (unsigned long)status.w800_mqtt_commit_seen,
+                       (unsigned long)status.w800_mqtt_stream_drops,
+                       status.w800_mqtt_last_topic,
+                       (unsigned int)status.w800_mqtt_last_payload_len,
+                       status.w800_http_pending,
+                       status.w800_http_active,
+                       status.w800_http_state,
+                       (unsigned long)status.w800_http_received,
+                       (unsigned long)status.w800_http_size,
+                       status.w800_http_error,
+                       status.w800_chunk_active,
+                       status.w800_chunk_state,
+                       (unsigned long)status.w800_chunk_received,
+                       (unsigned long)status.w800_chunk_size,
+                       (unsigned int)status.w800_chunk_unit,
+                       status.w800_chunk_retry,
+                       (unsigned long)status.w800_chunk_json_seen,
+                       (unsigned long)status.w800_chunk_json_drop,
+                       (unsigned long)status.w800_chunk_seq_error,
+                       (unsigned long)status.w800_chunk_offset_error,
+                       (unsigned long)status.w800_chunk_b64_error,
+                       (unsigned long)status.w800_chunk_crc_error,
+                       status.w800_chunk_error);
     return 0;
+}
+
+static uint8_t app_shell_control_read(
+    void *context, uint32_t address, uint8_t *data, uint32_t size)
+{
+    (void)context;
+    return gd25lq128_read(address, data, size) ? 1U : 0U;
+}
+
+static uint8_t app_shell_control_erase(void *context, uint32_t address)
+{
+    (void)context;
+    return gd25lq128_erase_4k(address) ? 1U : 0U;
+}
+
+static uint8_t app_shell_control_write(
+    void *context, uint32_t address, const uint8_t *data, uint32_t size)
+{
+    (void)context;
+    return gd25lq128_write(address, data, size) ? 1U : 0U;
 }
 
 static int app_shell_cmd_ota(shell_t *shell, int argc, char **argv, void *arg)
 {
     app_board_status_t status;
+    app_health_status_t health;
+    ota_boot_control_storage_t control_storage;
+    ota_boot_control_record_t control;
+    ota_control_copy_t control_copy;
+    uint8_t firmware_active;
+    uint32_t firmware_slot;
+    uint32_t firmware_received;
+    uint32_t firmware_expected;
 
     (void)arg;
     if(argc != 2 || strcmp(argv[1], "status") != 0)
@@ -291,6 +363,47 @@ static int app_shell_cmd_ota(shell_t *shell, int argc, char **argv, void *arg)
                        status.ota_active ? "active" : "idle",
                        (unsigned long)status.ota_received,
                        (unsigned long)status.ota_expected);
+
+    app_firmware_update_service_get_progress(
+        &firmware_active, &firmware_slot, &firmware_received, &firmware_expected);
+    app_health_get_status(30000U, &health);
+    (void)shell_printf(shell,
+                       "firmware active=%u slot=%lu received=%lu/%lu\r\n"
+                       "health required=0x%lX seen=0x%lX stale=0x%lX fault=%lu ticks=%lu\r\n",
+                       firmware_active,
+                       (unsigned long)firmware_slot,
+                       (unsigned long)firmware_received,
+                       (unsigned long)firmware_expected,
+                       (unsigned long)health.required_mask,
+                       (unsigned long)health.seen_mask,
+                       (unsigned long)health.stale_mask,
+                       (unsigned long)health.fatal_fault,
+                       (unsigned long)health.observation_ticks);
+
+    control_storage.context = NULL;
+    control_storage.read = app_shell_control_read;
+    control_storage.erase_sector = app_shell_control_erase;
+    control_storage.write = app_shell_control_write;
+    if(ota_boot_control_storage_load(
+           &control_storage, &control, &control_copy) == OTA_CONTROL_STATUS_OK)
+    {
+        (void)shell_printf(shell,
+                           "control copy=%u seq=%lu state=%lu active=%lu pending=%lu trial=%lu/%lu min=%lu error=%lu@0x%08lX\r\n",
+                           (unsigned int)control_copy,
+                           (unsigned long)control.sequence,
+                           (unsigned long)control.state,
+                           (unsigned long)control.active_slot,
+                           (unsigned long)control.pending_slot,
+                           (unsigned long)control.trial_boot_count,
+                           (unsigned long)control.trial_boot_limit,
+                           (unsigned long)control.minimum_version,
+                           (unsigned long)control.last_error,
+                           (unsigned long)control.last_error_address);
+    }
+    else
+    {
+        (void)shell_write(shell, "control unavailable\r\n");
+    }
     return 0;
 }
 
@@ -442,8 +555,60 @@ static int app_shell_cmd_ui(shell_t *shell, int argc, char **argv, void *arg)
     if(argc == 2 && strcmp(argv[1], "status") == 0)
     {
         page = app_ui_get_page();
-        (void)shell_printf(shell, "ui page=%s\r\n",
-                           page == APP_UI_PAGE_COMM ? "comm" : "dashboard");
+        (void)shell_printf(shell,
+                           "ui page=%s asset=%s version=%lu update=%lu/%lu err=%s@0x%08lX\r\n",
+                           page == APP_UI_PAGE_COMM ? "comm" : "dashboard",
+                           ui_asset_store_status(),
+                           (unsigned long)ui_asset_store_active_version(),
+                           (unsigned long)ui_asset_update_received(),
+                           (unsigned long)ui_asset_update_expected(),
+                           ui_asset_update_error(),
+                           (unsigned long)ui_asset_update_error_address());
+        return 0;
+    }
+
+    if(argc == 2 && strcmp(argv[1], "asset") == 0)
+    {
+        (void)shell_printf(shell,
+                           "ui asset available=%u status=%s version=%lu update=%lu/%lu err=%s@0x%08lX\r\n",
+                           ui_asset_store_available() ? 1U : 0U,
+                           ui_asset_store_status(),
+                           (unsigned long)ui_asset_store_active_version(),
+                           (unsigned long)ui_asset_update_received(),
+                           (unsigned long)ui_asset_update_expected(),
+                           ui_asset_update_error(),
+                           (unsigned long)ui_asset_update_error_address());
+        return 0;
+    }
+
+    if(argc == 2 && strcmp(argv[1], "flash") == 0)
+    {
+        gd25lq128_id_t id = {0};
+        static const uint8_t pattern[16] =
+        {
+            0x55U, 0xAAU, 0x11U, 0x22U, 0x33U, 0x44U, 0x5AU, 0xA5U,
+            0xC3U, 0x3CU, 0x78U, 0x87U, 0x00U, 0xFFU, 0x12U, 0x34U
+        };
+        uint8_t id_ok;
+        uint8_t erase_ok;
+        uint8_t write_ok;
+        uint8_t verify_ok;
+
+        id_ok = gd25lq128_read_id(&id) ? 1U : 0U;
+        erase_ok = gd25lq128_erase_4k(UI_ASSET_RESERVED_ADDR) ? 1U : 0U;
+        write_ok = erase_ok ? (gd25lq128_write(UI_ASSET_RESERVED_ADDR, pattern, sizeof(pattern)) ? 1U : 0U) : 0U;
+        verify_ok = write_ok ? (gd25lq128_read_verify(UI_ASSET_RESERVED_ADDR, pattern, sizeof(pattern)) ? 1U : 0U) : 0U;
+
+        (void)shell_printf(shell,
+                           "ui flash jedec=%u %02X %02X %02X test_addr=0x%08lX erase=%u write=%u verify=%u\r\n",
+                           id_ok,
+                           id.manufacturer_id,
+                           id.memory_type,
+                           id.capacity,
+                           (unsigned long)UI_ASSET_RESERVED_ADDR,
+                           erase_ok,
+                           write_ok,
+                           verify_ok);
         return 0;
     }
 
@@ -477,7 +642,7 @@ static int app_shell_cmd_ui(shell_t *shell, int argc, char **argv, void *arg)
         }
     }
 
-    (void)shell_write(shell, "usage: ui status|next|page dashboard|page comm\r\n");
+    (void)shell_write(shell, "usage: ui status|asset|flash|next|page dashboard|page comm\r\n");
     return -1;
 }
 
@@ -523,7 +688,7 @@ static const shell_command_t g_app_shell_commands[] =
     {"mqtt", "mqtt status|reconnect", "inspect or reconnect MQTT", app_shell_cmd_mqtt, NULL},
     {"ota", "ota status", "show OTA receive state", app_shell_cmd_ota, NULL},
     {"usb", "usb status", "show Vendor Bulk counters", app_shell_cmd_usb, NULL},
-    {"ui", "ui status|next|page dashboard|page comm", "switch LVGL pages", app_shell_cmd_ui, NULL},
+    {"ui", "ui status|asset|next|page dashboard|page comm", "switch LVGL pages", app_shell_cmd_ui, NULL},
     {"touch", "touch status|read", "read FT6336U touch state", app_shell_cmd_touch, NULL}
 };
 

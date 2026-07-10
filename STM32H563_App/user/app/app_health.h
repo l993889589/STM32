@@ -50,4 +50,9 @@ uint8_t app_health_is_ready(
     ULONG stale_limit_ticks,
     app_health_status_t *status);
 
+/* Read masks and fault state without applying the observation-window gate. */
+void app_health_get_status(
+    ULONG stale_limit_ticks,
+    app_health_status_t *status);
+
 #endif /* APP_HEALTH_H */

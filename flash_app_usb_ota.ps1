@@ -282,7 +282,7 @@ Set-U32Le $descriptorData 0  2
 Set-U32Le $descriptorData 4  ([uint32]$manifestJson.image_version)
 Set-U32Le $descriptorData 8  ([uint32]$appData.Length)
 Set-U32Le $descriptorData 12 (Convert-HexU32 ([string]$manifestJson.image_crc32))
-Set-U32Le $descriptorData 16 0
+Set-U32Le $descriptorData 16 (Convert-HexU32 ([string]$manifestJson.image_flags))
 Set-U32Le $descriptorData 20 (Convert-HexU32 ([string]$manifestJson.load_address))
 Set-U32Le $descriptorData 24 (Convert-HexU32 ([string]$manifestJson.entry_address))
 $imageSha = Convert-HexBytes ([string]$manifestJson.image_sha256)
@@ -290,6 +290,11 @@ if($imageSha.Length -ne 32) {
     throw "Expected 32-byte SHA-256, got $($imageSha.Length) bytes"
 }
 [System.Buffer]::BlockCopy($imageSha, 0, $descriptorData, 28, $imageSha.Length)
+$signature = Convert-HexBytes ([string]$manifestJson.signature)
+if($signature.Length -ne 64) {
+    throw "Expected 64-byte ECDSA signature, got $($signature.Length) bytes"
+}
+[System.Buffer]::BlockCopy($signature, 0, $descriptorData, 60, $signature.Length)
 
 if([string]::IsNullOrWhiteSpace($Port)) {
     $Port = Find-UsbCdcPort

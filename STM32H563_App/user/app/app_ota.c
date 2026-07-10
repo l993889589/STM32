@@ -173,6 +173,10 @@ static int app_ota_confirm_v2_trial(void)
         record.slots[record.active_slot].state = (uint32_t)OTA_SLOT_STATE_VERIFIED;
     }
     record.slots[pending_slot].state = (uint32_t)OTA_SLOT_STATE_CONFIRMED;
+    if(record.minimum_version < record.slots[pending_slot].image_version)
+    {
+        record.minimum_version = record.slots[pending_slot].image_version;
+    }
     record.active_slot = pending_slot;
     record.pending_slot = (uint32_t)OTA_FIRMWARE_SLOT_NONE;
     record.state = (uint32_t)OTA_CONTROL_STATE_CONFIRMED;

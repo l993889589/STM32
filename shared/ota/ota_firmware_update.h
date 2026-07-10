@@ -25,7 +25,8 @@ typedef enum
     OTA_FIRMWARE_UPDATE_IO_ERROR = 7,
     OTA_FIRMWARE_UPDATE_VERIFY_FAILED = 8,
     OTA_FIRMWARE_UPDATE_CRC_MISMATCH = 9,
-    OTA_FIRMWARE_UPDATE_CONTROL_ERROR = 10
+    OTA_FIRMWARE_UPDATE_CONTROL_ERROR = 10,
+    OTA_FIRMWARE_UPDATE_SHA256_MISMATCH = 11
 } ota_firmware_update_status_t;
 
 typedef struct
@@ -45,6 +46,7 @@ typedef struct
     uint32_t received_size;
     uint32_t expected_crc32;
     uint32_t target_slot;
+    uint32_t abort_state;
     uint8_t verify_buffer[OTA_FIRMWARE_UPDATE_VERIFY_BUFFER_SIZE];
     uint8_t is_active;
 } ota_firmware_update_t;
@@ -56,6 +58,11 @@ ota_firmware_update_status_t ota_firmware_update_init(
 
 /* Select, record and erase the inactive firmware slot for a new package. */
 ota_firmware_update_status_t ota_firmware_update_begin(
+    ota_firmware_update_t *update,
+    const ota_firmware_descriptor_t *descriptor);
+
+/* Begin an update from Boot recovery, including an unprovisioned device. */
+ota_firmware_update_status_t ota_firmware_update_begin_recovery(
     ota_firmware_update_t *update,
     const ota_firmware_descriptor_t *descriptor);
 

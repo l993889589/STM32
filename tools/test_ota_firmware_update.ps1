@@ -24,6 +24,7 @@ $Arguments = @(
     "-Werror",
     "-I", (Join-Path $Root "shared\ota"),
     (Join-Path $Root "shared\ota\ota_boot_control.c"),
+    (Join-Path $Root "shared\ota\ota_sha256.c"),
     (Join-Path $Root "shared\ota\ota_firmware_update.c"),
     (Join-Path $Root "tools\tests\test_ota_firmware_update.c"),
     "-o", $Executable

@@ -10,8 +10,8 @@ The USB application exposes two logical paths:
 - CDC ACM: human shell, status text, and the compatibility LDOT OTA stream.
 - Vendor Bulk: LDV1 framed binary channels for OTA, LDC stress, and structured commands.
 
-The current bootloader exposes CDC maintenance shell only. It does not implement
-Bulk OTA and it does not update itself.
+The bootloader exposes CDC maintenance shell and a binary-safe LDOT v2 recovery
+receiver. It does not implement Bulk OTA and it never updates its own Boot area.
 
 ## Current Protocols
 
@@ -20,14 +20,10 @@ Bulk OTA and it does not update itself.
 The application accepts binary LDOT frames on CDC before shell parsing. The frame
 payload limit is 224 bytes.
 
-Commands:
-
-- `1` begin application image download into external flash.
-- `2` write application image data.
-- `3` write one manifest copy.
-- `4` end application image download.
-- `5` reset MCU.
-- `16/17/18` update UI asset package.
+Current firmware A/B commands are `32` begin, `33` data, `34` finish, `35`
+abort and `5` reset. The begin payload is the 124-byte signed firmware
+descriptor. Commands `1..4` remain only in App as a one-time legacy migration
+path; Boot recovery intentionally accepts only v2.
 
 The PC waits for text acknowledgements:
 
@@ -101,10 +97,9 @@ This script does not erase or write the bootloader range.
 
 ## Bootloader Provisioning Boundary
 
-The bootloader itself cannot be updated by the current USB OTA path because:
+The bootloader itself cannot be updated by either USB OTA path because:
 
-- Bootloader USB only registers CDC maintenance shell.
-- Bootloader has no LDOT/LDV1 image receiver.
+- Bootloader USB recovery writes only the inactive external firmware slot.
 - A bootloader must not overwrite its own executing flash range without a
   separate protected two-stage design.
 
@@ -148,3 +143,8 @@ After one-time bootloader provisioning:
 4. Confirm app status reports the new firmware build.
 5. Confirm vendor Bulk appears or test LDV1 control ping from a PyUSB tool.
 6. Confirm OTA confirm task marks trial boot as confirmed after the configured delay.
+
+The Boot shell commands `ota status` and `security` report control-copy state,
+active/pending slots, trial count, last error, reset flags, key id, minimum
+version and Boot WRP status. These are the first diagnostics to collect before
+reflashing a device.

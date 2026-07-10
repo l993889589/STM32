@@ -18,5 +18,6 @@ uint8_t ota_boot_install_external_image(
     uint32_t address,
     uint32_t image_size,
     uint32_t image_crc32);
+uint32_t ota_boot_reset_reason(void);
 
 #endif /* OTA_BOOT_PRIVATE_H */

@@ -119,7 +119,7 @@ static uint8_t g_mqtt_connect_packet[128];
 static uint8_t g_mqtt_subscribe_packet[160];
 #if APP_W800_STATUS_MQTT_ENABLE
 static uint8_t g_mqtt_status_packet[2048];
-static char g_mqtt_status_payload[1280];
+static char g_mqtt_status_payload[1536];
 #endif
 static uint8_t g_mqtt_modbus_packet[1024];
 static char g_mqtt_modbus_payload[768];
@@ -182,7 +182,10 @@ typedef struct
     uint32_t size;
     uint32_t version;
     uint32_t crc32;
+    uint32_t image_flags;
     uint32_t entry_address;
+    uint8_t image_sha256[32];
+    uint8_t signature[64];
     uint32_t received;
     uint32_t calc_crc32;
     uint32_t content_length;
@@ -769,6 +772,45 @@ static bool app_w800_json_get_string(const char *text,
     return true;
 }
 
+static bool app_w800_json_get_hex(
+    const char *text,
+    const char *key,
+    uint8_t *out,
+    uint16_t out_size)
+{
+    char hex[129];
+    uint16_t index;
+
+    if(out == NULL || out_size == 0U || out_size > (sizeof(hex) - 1U) / 2U ||
+       !app_w800_json_get_string(text, key, hex, sizeof(hex)) ||
+       strlen(hex) != (size_t)out_size * 2U)
+    {
+        return false;
+    }
+
+    for(index = 0U; index < out_size; index++)
+    {
+        uint8_t value = 0U;
+        uint8_t nibble;
+        uint8_t half;
+        for(half = 0U; half < 2U; half++)
+        {
+            char c = hex[index * 2U + half];
+            if(c >= '0' && c <= '9')
+                nibble = (uint8_t)(c - '0');
+            else if(c >= 'A' && c <= 'F')
+                nibble = (uint8_t)(c - 'A' + 10);
+            else if(c >= 'a' && c <= 'f')
+                nibble = (uint8_t)(c - 'a' + 10);
+            else
+                return false;
+            value = (uint8_t)((value << 4U) | nibble);
+        }
+        out[index] = value;
+    }
+    return true;
+}
+
 static bool app_w800_json_get_u32(const char *text, const char *key, uint32_t *out)
 {
     const char *pos;
@@ -1334,6 +1376,7 @@ static void app_w800_apply_json_command(const char *text)
     if(strcmp(cmd, "fw_http_update") == 0)
     {
         uint32_t entry_address;
+        uint32_t image_flags;
         uint32_t chunk_size = APP_W800_HTTP_RANGE_DEFAULT;
 
         if(app_w800_json_get_string(text, "host", g_http_update.host, sizeof(g_http_update.host)) &&
@@ -1342,7 +1385,12 @@ static void app_w800_apply_json_command(const char *text)
            app_w800_json_get_u32(text, "size", &size) &&
            app_w800_json_get_u32(text, "version", &version) &&
            app_w800_json_get_u32(text, "crc32", &crc32) &&
-           app_w800_json_get_u32(text, "entryAddress", &entry_address))
+           app_w800_json_get_u32(text, "imageFlags", &image_flags) &&
+           app_w800_json_get_u32(text, "entryAddress", &entry_address) &&
+           app_w800_json_get_hex(text, "sha256", g_http_update.image_sha256,
+                                  sizeof(g_http_update.image_sha256)) &&
+           app_w800_json_get_hex(text, "signature", g_http_update.signature,
+                                  sizeof(g_http_update.signature)))
         {
             (void)app_w800_json_get_u32(text, "chunkSize", &chunk_size);
             if(chunk_size > APP_W800_HTTP_RANGE_MAX)
@@ -1354,6 +1402,7 @@ static void app_w800_apply_json_command(const char *text)
             g_http_update.size = size;
             g_http_update.version = version;
             g_http_update.crc32 = crc32;
+            g_http_update.image_flags = image_flags;
             g_http_update.entry_address = entry_address;
             g_http_update.target = APP_W800_HTTP_TARGET_FIRMWARE;
             g_http_update.raw_tcp = APP_W800_HTTP_MODE_RANGE;
@@ -2201,15 +2250,25 @@ static bool app_w800_mqtt_publish_status(const char *mode)
     int payload_len;
     ui_asset_decoder_stats_t asset_dec_stats;
     at_session_binary_diag_t at_binary_diag;
+    app_health_status_t health;
+    uint8_t firmware_active;
+    uint32_t firmware_slot;
+    uint32_t firmware_received;
+    uint32_t firmware_expected;
 
     ui_asset_store_decoder_stats(&asset_dec_stats);
     at_session_binary_diag(&g_at_session, &at_binary_diag);
+    app_health_get_status(30000U, &health);
+    app_firmware_update_service_get_progress(
+        &firmware_active, &firmware_slot, &firmware_received, &firmware_expected);
     memset(g_mqtt_status_payload, 0, sizeof(g_mqtt_status_payload));
     payload_len = snprintf(g_mqtt_status_payload, sizeof(g_mqtt_status_payload),
                    "{\"deviceId\":\"%s\",\"fwBuildId\":\"%s\",\"online\":true,\"mode\":\"%s\",\"broker\":\"%s:%u\","
                    "\"asset\":{\"available\":%u,\"version\":%lu,\"slot\":%u,\"received\":%lu,\"expected\":%lu,"
                    "\"error\":\"%s\",\"errorAddress\":%lu,"
                    "\"dec\":{\"info\":%lu,\"open\":%lu,\"area\":%lu,\"readFail\":%lu}},"
+                   "\"firmware\":{\"active\":%u,\"slot\":%lu,\"received\":%lu,\"expected\":%lu},"
+                   "\"health\":{\"required\":%lu,\"seen\":%lu,\"stale\":%lu,\"fault\":%lu,\"ticks\":%lu},"
                    "\"http\":{\"target\":%u,\"pending\":%u,\"active\":%u,\"state\":%u,\"received\":%lu,\"size\":%lu,\"error\":\"%s\"},"
                    "\"chunk\":{\"active\":%u,\"state\":%u,\"received\":%lu,\"size\":%lu,\"chunk\":%u,\"retry\":%u,"
                    "\"seen\":%lu,\"drop\":%lu,\"seqErr\":%lu,\"ofsErr\":%lu,\"b64Err\":%lu,\"crcErr\":%lu,\"error\":\"%s\"},"
@@ -2232,6 +2291,15 @@ static bool app_w800_mqtt_publish_status(const char *mode)
                    (unsigned long)asset_dec_stats.open_hits,
                    (unsigned long)asset_dec_stats.area_hits,
                    (unsigned long)asset_dec_stats.read_failures,
+                   firmware_active,
+                   (unsigned long)firmware_slot,
+                   (unsigned long)firmware_received,
+                   (unsigned long)firmware_expected,
+                   (unsigned long)health.required_mask,
+                   (unsigned long)health.seen_mask,
+                   (unsigned long)health.stale_mask,
+                   (unsigned long)health.fatal_fault,
+                   (unsigned long)health.observation_ticks,
                    (unsigned int)g_http_update.target,
                    g_http_update.pending,
                    g_http_update.active,
@@ -2770,8 +2838,13 @@ static bool app_w800_http_direct_range_download_asset(void)
     firmware_descriptor.image_version = g_http_update.version;
     firmware_descriptor.image_size = g_http_update.size;
     firmware_descriptor.image_crc32 = g_http_update.crc32;
+    firmware_descriptor.image_flags = g_http_update.image_flags;
     firmware_descriptor.load_address = OTA_APP_BASE;
     firmware_descriptor.entry_address = g_http_update.entry_address;
+    memcpy(firmware_descriptor.image_sha256, g_http_update.image_sha256,
+           sizeof(firmware_descriptor.image_sha256));
+    memcpy(firmware_descriptor.signature, g_http_update.signature,
+           sizeof(firmware_descriptor.signature));
 
     if((firmware_target &&
         app_firmware_update_service_begin(&firmware_descriptor) != OTA_FIRMWARE_UPDATE_OK) ||

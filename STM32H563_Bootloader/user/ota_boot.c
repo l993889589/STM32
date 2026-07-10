@@ -193,6 +193,11 @@ uint8_t ota_boot_app_is_valid(void)
     return ota_app_vector_is_valid();
 }
 
+uint32_t ota_boot_reset_reason(void)
+{
+    return RCC->RSR;
+}
+
 static uint8_t ota_quadword_is_blank(const uint8_t *data)
 {
     for(uint32_t i = 0U; i < OTA_FLASH_QUADWORD_SIZE; i++)

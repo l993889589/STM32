@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>TX_INCLUDE_USER_DEFINE_FILE,TX_SINGLE_MODE_NON_SECURE=1,UX_INCLUDE_USER_DEFINE_FILE,USE_HAL_DRIVER,STM32H563xx</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../AZURE_RTOS/App;../USBX/App;../USBX/Target;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/threadx/common/inc;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Middlewares/ST/threadx/ports/cortex_m33/ac6/inc;../Middlewares/ST/usbx/common/core/inc;../Middlewares/ST/usbx/ports/generic/inc;../Middlewares/ST/usbx/common/usbx_stm32_device_controllers;../Middlewares/ST/usbx/common/usbx_device_classes/inc;../Drivers/CMSIS/Include;../user;../user/ldc;../user/shell</IncludePath>
+              <IncludePath>../Core/Inc;../AZURE_RTOS/App;../USBX/App;../USBX/Target;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/threadx/common/inc;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Middlewares/ST/threadx/ports/cortex_m33/ac6/inc;../Middlewares/ST/usbx/common/core/inc;../Middlewares/ST/usbx/ports/generic/inc;../Middlewares/ST/usbx/common/usbx_stm32_device_controllers;../Middlewares/ST/usbx/common/usbx_device_classes/inc;../Drivers/CMSIS/Include;../user;../user/ldc;../user/shell;../../shared/ota</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -358,7 +358,7 @@
               <MiscControls></MiscControls>
               <Define>TX_SINGLE_MODE_NON_SECURE=1</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../AZURE_RTOS/App;../USBX/App;../USBX/Target;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/threadx/common/inc;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Middlewares/ST/threadx/ports/cortex_m33/ac6/inc;../Middlewares/ST/usbx/common/core/inc;../Middlewares/ST/usbx/ports/generic/inc;../Middlewares/ST/usbx/common/usbx_stm32_device_controllers;../Middlewares/ST/usbx/common/usbx_device_classes/inc;../Drivers/CMSIS/Include;../user;..\user\ldc;../user/shell</IncludePath>
+              <IncludePath>../Core/Inc;../AZURE_RTOS/App;../USBX/App;../USBX/Target;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Middlewares/ST/threadx/common/inc;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Middlewares/ST/threadx/ports/cortex_m33/ac6/inc;../Middlewares/ST/usbx/common/core/inc;../Middlewares/ST/usbx/ports/generic/inc;../Middlewares/ST/usbx/common/usbx_stm32_device_controllers;../Middlewares/ST/usbx/common/usbx_device_classes/inc;../Drivers/CMSIS/Include;../user;..\user\ldc;../user/shell;../../shared/ota</IncludePath>
             </VariousControls>
           </Aads>
           <LDads>
@@ -831,6 +831,76 @@
               <FilePath>..\..\shared\ota\ota_boot_control.h</FilePath>
             </File>
             <File>
+              <FileName>ota_firmware_update.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\shared\ota\ota_firmware_update.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_firmware_update.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\shared\ota\ota_firmware_update.h</FilePath>
+            </File>
+            <File>
+              <FileName>ota_sha256.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\shared\ota\ota_sha256.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_sha256.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\shared\ota\ota_sha256.h</FilePath>
+            </File>
+            <File>
+              <FileName>ota_security_policy.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\shared\ota\ota_security_policy.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_security_policy.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\shared\ota\ota_security_policy.h</FilePath>
+            </File>
+            <File>
+              <FileName>boot_security.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\boot_security.c</FilePath>
+            </File>
+            <File>
+              <FileName>boot_security.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\boot_security.h</FilePath>
+            </File>
+            <File>
+              <FileName>boot_trust_anchor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\boot_trust_anchor.c</FilePath>
+            </File>
+            <File>
+              <FileName>boot_trust_anchor.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\boot_trust_anchor.h</FilePath>
+            </File>
+            <File>
+              <FileName>boot_protection.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\boot_protection.c</FilePath>
+            </File>
+            <File>
+              <FileName>boot_protection.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\boot_protection.h</FilePath>
+            </File>
+            <File>
+              <FileName>boot_usb_recovery.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\boot_usb_recovery.c</FilePath>
+            </File>
+            <File>
+              <FileName>boot_usb_recovery.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\boot_usb_recovery.h</FilePath>
+            </File>
+            <File>
               <FileName>boot_shell.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\boot_shell.c</FilePath>
@@ -989,6 +1059,11 @@
               <FileName>stm32h5xx_hal_flash.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_flash.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32h5xx_hal_pka.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Drivers/STM32H5xx_HAL_Driver/Src/stm32h5xx_hal_pka.c</FilePath>
             </File>
             <File>
               <FileName>stm32h5xx_hal_flash_ex.c</FileName>

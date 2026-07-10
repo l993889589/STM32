@@ -976,6 +976,16 @@
               <FileType>5</FileType>
               <FilePath>..\..\shared\ota\ota_firmware_update.h</FilePath>
             </File>
+            <File>
+              <FileName>ota_sha256.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\shared\ota\ota_sha256.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_sha256.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\shared\ota\ota_sha256.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

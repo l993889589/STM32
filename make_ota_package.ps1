@@ -3,7 +3,9 @@ param(
   [string]$InputFile = "",
   [uint32]$AppBase = 0x08020000,
   [string]$PackageName = "",
-  [string]$OutputDir = ""
+  [string]$OutputDir = "",
+  [string]$SigningKey = "$env:USERPROFILE\.leduo\keys\h563_ota_private.pem",
+  [switch]$SkipSigning
 )
 
 $ErrorActionPreference = "Stop"
@@ -264,4 +266,18 @@ $summary = [ordered]@{
 $json = $summary | ConvertTo-Json
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($ManifestJson, $json, $utf8NoBom)
-$summary | Format-List
+
+if (!$SkipSigning) {
+  $Signer = Join-Path $Root "tools\ota_sign.py"
+  if (!(Test-Path -LiteralPath $SigningKey)) {
+    throw "OTA signing key not found: $SigningKey"
+  }
+  python $Signer sign --private-key $SigningKey --image $AppBin --manifest $ManifestJson --manifest-bin $ManifestBin
+  if ($LASTEXITCODE -ne 0) {
+    throw "OTA signing failed with exit code $LASTEXITCODE"
+  }
+  Get-Content -Raw -LiteralPath $ManifestJson | ConvertFrom-Json | Format-List
+} else {
+  Write-Warning "Generated an unsigned package; production Boot will reject it."
+  $summary | Format-List
+}

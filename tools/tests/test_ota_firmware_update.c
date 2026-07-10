@@ -3,6 +3,7 @@
  * Tests prove that incomplete and corrupt downloads never modify active slot A.
  */
 #include "ota_firmware_update.h"
+#include "ota_sha256.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -101,6 +102,7 @@ static void make_descriptor(
     descriptor->image_version = 2026071001U;
     descriptor->image_size = image_size;
     descriptor->image_crc32 = test_crc32(0U, image, image_size);
+    ota_sha256_calculate(image, image_size, descriptor->image_sha256);
     descriptor->load_address = OTA_APP_BASE;
     descriptor->entry_address = OTA_APP_BASE + 0x101U;
 }
@@ -130,6 +132,21 @@ static void provision_active_slot_a(fake_firmware_flash_t *flash)
     TEST_CHECK(ota_boot_control_storage_store(&storage, &record, &committed, &copy) ==
                OTA_CONTROL_STATUS_OK);
     memset(&flash->bytes[OTA_EXT_FIRMWARE_SLOT_A_ADDR], 0xA5, TEST_IMAGE_SIZE);
+}
+
+static void test_sha256_known_vector(void)
+{
+    static const uint8_t expected[OTA_SHA256_DIGEST_SIZE] =
+    {
+        0xBA, 0x78, 0x16, 0xBF, 0x8F, 0x01, 0xCF, 0xEA,
+        0x41, 0x41, 0x40, 0xDE, 0x5D, 0xAE, 0x22, 0x23,
+        0xB0, 0x03, 0x61, 0xA3, 0x96, 0x17, 0x7A, 0x9C,
+        0xB4, 0x10, 0xFF, 0x61, 0xF2, 0x00, 0x15, 0xAD
+    };
+    uint8_t actual[OTA_SHA256_DIGEST_SIZE];
+
+    ota_sha256_calculate((const uint8_t *)"abc", 3U, actual);
+    TEST_CHECK(memcmp(actual, expected, sizeof(expected)) == 0);
 }
 
 static void test_incomplete_download_preserves_active_slot(void)
@@ -271,11 +288,59 @@ static void test_bad_crc_never_becomes_pending(void)
     free(flash.bytes);
 }
 
+static void test_recovery_provisions_first_slot(void)
+{
+    fake_firmware_flash_t flash;
+    ota_firmware_update_storage_t storage;
+    ota_boot_control_storage_t control_storage;
+    ota_boot_control_record_t control;
+    ota_firmware_update_t update;
+    ota_firmware_descriptor_t descriptor;
+    ota_control_copy_t copy;
+    uint8_t image[TEST_IMAGE_SIZE];
+
+    flash.bytes = (uint8_t *)malloc(TEST_FLASH_SIZE);
+    TEST_CHECK(flash.bytes != NULL);
+    if(flash.bytes == NULL)
+    {
+        return;
+    }
+    memset(flash.bytes, 0xFF, TEST_FLASH_SIZE);
+    flash.fail_writes = 0U;
+    memset(image, 0x69, sizeof(image));
+    make_descriptor(&descriptor, image, sizeof(image));
+    storage = fake_storage(&flash);
+
+    TEST_CHECK(ota_firmware_update_init(&update, &storage) == OTA_FIRMWARE_UPDATE_OK);
+    TEST_CHECK(ota_firmware_update_begin(&update, &descriptor) ==
+               OTA_FIRMWARE_UPDATE_NOT_PROVISIONED);
+    TEST_CHECK(ota_firmware_update_begin_recovery(&update, &descriptor) ==
+               OTA_FIRMWARE_UPDATE_OK);
+    TEST_CHECK(update.target_slot == OTA_FIRMWARE_SLOT_A);
+    TEST_CHECK(ota_firmware_update_write(&update, 0U, image, sizeof(image)) ==
+               OTA_FIRMWARE_UPDATE_OK);
+    TEST_CHECK(ota_firmware_update_finish(&update) == OTA_FIRMWARE_UPDATE_OK);
+
+    control_storage.context = &flash;
+    control_storage.read = fake_read;
+    control_storage.erase_sector = fake_erase;
+    control_storage.write = fake_write;
+    TEST_CHECK(ota_boot_control_storage_load(&control_storage, &control, &copy) ==
+               OTA_CONTROL_STATUS_OK);
+    TEST_CHECK(control.state == OTA_CONTROL_STATE_PENDING);
+    TEST_CHECK(control.active_slot == OTA_FIRMWARE_SLOT_NONE);
+    TEST_CHECK(control.pending_slot == OTA_FIRMWARE_SLOT_A);
+
+    free(flash.bytes);
+}
+
 int main(void)
 {
+    test_sha256_known_vector();
     test_incomplete_download_preserves_active_slot();
     test_complete_download_becomes_pending();
     test_bad_crc_never_becomes_pending();
+    test_recovery_provisions_first_slot();
 
     if(test_failures != 0)
     {

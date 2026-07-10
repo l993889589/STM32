@@ -15,6 +15,7 @@ static uint32_t internal_crc;
 static uint8_t fail_install;
 static uint8_t external_valid_a;
 static uint8_t external_valid_b;
+static uint8_t security_valid;
 static int test_failures;
 
 #define TEST_CHECK(condition) \
@@ -31,6 +32,26 @@ static void test_reset(void)
     fail_install = 0U;
     external_valid_a = 1U;
     external_valid_b = 1U;
+    security_valid = 1U;
+}
+
+uint8_t boot_security_verify_slot(
+    const ota_boot_control_record_t *record,
+    uint32_t slot,
+    uint32_t *control_error)
+{
+    (void)record;
+    (void)slot;
+    if(control_error != NULL)
+    {
+        *control_error = (uint32_t)OTA_CONTROL_ERROR_IMAGE_SIGNATURE;
+    }
+    return security_valid;
+}
+
+uint32_t ota_boot_reset_reason(void)
+{
+    return 0x12345678U;
 }
 
 static uint8_t test_metadata_read(
