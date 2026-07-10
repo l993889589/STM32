@@ -1,4 +1,6 @@
 #include "ota_boot.h"
+#include "ota_boot_private.h"
+#include "ota_boot_v2.h"
 #include "gd25lq128.h"
 #include "main.h"
 #include <string.h>
@@ -184,6 +186,11 @@ static uint8_t ota_app_vector_is_valid(void)
            (app_reset >= OTA_APP_BASE) &&
            (app_reset < flash_end) &&
            ((app_reset & 1U) != 0U);
+}
+
+uint8_t ota_boot_app_is_valid(void)
+{
+    return ota_app_vector_is_valid();
 }
 
 static uint8_t ota_quadword_is_blank(const uint8_t *data)
@@ -452,6 +459,57 @@ static uint8_t ota_flash_verify_app(const ota_manifest_t *manifest)
     return (crc == manifest->image_crc32) ? 1U : 0U;
 }
 
+uint8_t ota_boot_internal_image_matches(uint32_t image_size, uint32_t image_crc32)
+{
+    return (image_size != 0U && image_size <= OTA_APP_SIZE &&
+            ota_app_vector_is_valid() &&
+            ota_crc32_internal_flash(OTA_APP_BASE, image_size) == image_crc32) ? 1U : 0U;
+}
+
+uint8_t ota_boot_external_image_is_valid(
+    uint32_t address,
+    uint32_t image_size,
+    uint32_t image_crc32)
+{
+    uint32_t slot_end;
+
+    if(address != OTA_EXT_FIRMWARE_SLOT_A_ADDR &&
+       address != OTA_EXT_FIRMWARE_SLOT_B_ADDR)
+    {
+        return 0U;
+    }
+
+    slot_end = address + OTA_EXT_FIRMWARE_SLOT_SIZE;
+    if(image_size == 0U || image_size > OTA_APP_SIZE ||
+       image_size > OTA_EXT_FIRMWARE_SLOT_SIZE || address + image_size > slot_end)
+    {
+        return 0U;
+    }
+
+    return ota_verify_ext_image(address, image_size, image_crc32);
+}
+
+uint8_t ota_boot_install_external_image(
+    uint32_t address,
+    uint32_t image_size,
+    uint32_t image_crc32)
+{
+    uint8_t programmed;
+
+    if(!ota_boot_external_image_is_valid(address, image_size, image_crc32) ||
+       HAL_FLASH_Unlock() != HAL_OK)
+    {
+        return 0U;
+    }
+
+    programmed = ota_flash_erase_app(OTA_APP_SIZE) &&
+                 ota_flash_program_app_from_ext(address, image_size);
+    (void)HAL_FLASH_Lock();
+
+    return (programmed != 0U &&
+            ota_boot_internal_image_matches(image_size, image_crc32)) ? 1U : 0U;
+}
+
 static uint8_t ota_restore_backup_app(ota_manifest_t *manifest)
 {
     if((manifest->rollback_address != OTA_EXT_BACKUP_ADDR) ||
@@ -502,18 +560,36 @@ ota_boot_result_t ota_boot_process_update(void)
 {
     ota_manifest_t manifest;
 
+    if(ota_boot_v2_record_available())
+    {
+        return ota_boot_v2_process();
+    }
+
     if(!ota_manifest_load_active(&manifest))
     {
         return OTA_BOOT_RESULT_NO_UPDATE;
     }
 
-    if(ota_app_vector_is_valid())
+    if((manifest.boot_state == OTA_BOOT_STATE_NORMAL ||
+        manifest.boot_state == OTA_BOOT_STATE_CONFIRMED) &&
+       ota_boot_v2_migrate_confirmed_v1(&manifest))
     {
-        return OTA_BOOT_RESULT_NO_UPDATE;
+        return ota_boot_v2_process();
+    }
+
+    if(manifest.boot_state == OTA_BOOT_STATE_TRIAL_BOOT &&
+       ota_boot_v2_migrate_trial_v1(&manifest))
+    {
+        return ota_boot_v2_process();
     }
 
     if(ota_manifest_is_rollback_state(manifest.boot_state))
     {
+        if(ota_app_vector_is_valid())
+        {
+            return OTA_BOOT_RESULT_NO_UPDATE;
+        }
+
         return ota_restore_backup_app(&manifest) ?
                OTA_BOOT_RESULT_ROLLED_BACK :
                OTA_BOOT_RESULT_ROLLBACK_FAILED;
@@ -583,5 +659,6 @@ ota_boot_result_t ota_boot_process_update(void)
         return OTA_BOOT_RESULT_FLASH_ERROR;
     }
 
+    (void)ota_boot_v2_migrate_trial_v1(&manifest);
     return OTA_BOOT_RESULT_INSTALLED;
 }

@@ -10,9 +10,9 @@ complete only when its stated tests and evidence are recorded here.
 | 0. Freeze baseline | Complete | Hashes and read-only COM4 board snapshot captured |
 | 1. Freeze memory architecture | Complete | Shared layout; App and Boot build with 0 errors/warnings |
 | 2. Power-safe metadata | Complete | 348 torn-write offsets; one-copy read failure; dual ARM builds |
-| 3. Persistent firmware A/B | In progress | Interrupted download preserves active slot |
-| 4. Boot install and rollback | Pending | Power-cut and bounded trial tests |
-| 5. App download and health confirmation | Pending | HTTP Range and failed-health rollback tests |
+| 3. Persistent firmware A/B | Complete | Incomplete/corrupt candidate preserves active slot; LDOT v2 |
+| 4. Boot install and rollback | Complete | INSTALLING retry, 3-attempt trial rollback, v1 migration tests |
+| 5. App download and health confirmation | In progress | HTTP Range compiled; live server/board test pending |
 | 6. Independent USB recovery | Pending | Recovery from erased internal App |
 | 7. Signature and anti-rollback | Pending | Tamper and downgrade rejection tests |
 | 8. Diagnostics | Pending | Reset/update/slot/error query evidence |

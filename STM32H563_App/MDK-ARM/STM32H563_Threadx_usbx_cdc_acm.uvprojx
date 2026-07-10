@@ -922,6 +922,26 @@
               <FilePath>..\user\app\app_ota.h</FilePath>
             </File>
             <File>
+              <FileName>app_health.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\app\app_health.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_health.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\app\app_health.h</FilePath>
+            </File>
+            <File>
+              <FileName>app_firmware_update_service.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\app\app_firmware_update_service.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_firmware_update_service.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\app\app_firmware_update_service.h</FilePath>
+            </File>
+            <File>
               <FileName>mqtt_packet.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\app\mqtt_packet.c</FilePath>
@@ -935,6 +955,26 @@
               <FileName>ota_layout.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\app\ota_layout.h</FilePath>
+            </File>
+            <File>
+              <FileName>ota_boot_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\shared\ota\ota_boot_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_boot_control.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\shared\ota\ota_boot_control.h</FilePath>
+            </File>
+            <File>
+              <FileName>ota_firmware_update.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\shared\ota\ota_firmware_update.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_firmware_update.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\shared\ota\ota_firmware_update.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -1057,6 +1097,16 @@
               <FilePath>..\user\ui\lvgl\lv_port_disp.h</FilePath>
             </File>
             <File>
+              <FileName>lv_port_indev.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\ui\lvgl\lv_port_indev.c</FilePath>
+            </File>
+            <File>
+              <FileName>lv_port_indev.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\ui\lvgl\lv_port_indev.h</FilePath>
+            </File>
+            <File>
               <FileName>lv_conf.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\ui\lvgl\lv_conf.h</FilePath>
@@ -1070,6 +1120,21 @@
               <FileName>sim_ui.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\ui\lvgl\sim_ui.h</FilePath>
+            </File>
+            <File>
+              <FileName>boot_eye_img.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\ui\lvgl\boot_eye_img.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_asset_store.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\ui\lvgl\ui_asset_store.c</FilePath>
+            </File>
+            <File>
+              <FileName>ui_asset_store.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\ui\lvgl\ui_asset_store.h</FilePath>
             </File>
             <File>
               <FileName>sim_data.c</FileName>

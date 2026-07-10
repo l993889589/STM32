@@ -26,6 +26,7 @@
 #include "app_board_io.h"
 #include "app_config.h"
 #include "app_ota.h"
+#include "app_health.h"
 #include "app_ui.h"
 #include "app_debug.h"
 /* USER CODE END Includes */
@@ -79,6 +80,7 @@ static volatile TX_THREAD *g_stack_error_thread;
 static void app_threadx_stack_error_handler(TX_THREAD *thread_ptr)
 {
     g_stack_error_thread = thread_ptr;
+    app_health_report_fault(APP_HEALTH_FAULT_THREAD_STACK);
     (void)thread_ptr;
 }
 /* USER CODE END PFP */
@@ -97,6 +99,7 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
   /* USER CODE END App_ThreadX_MEM_POOL */
   /* USER CODE BEGIN App_ThreadX_Init */
   (void)tx_thread_stack_error_notify(app_threadx_stack_error_handler);
+  app_health_init();
 //	  if(tx_thread_create(&app_tick_thread, "timer tick",
 //                      app_tick_task_entry, 0U,
 //                      app_tick_thread_stack, sizeof(app_tick_thread_stack),
@@ -119,12 +122,6 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
   }
 
   ret = app_board_io_init();
-  if(ret != TX_SUCCESS)
-  {
-    return ret;
-  }
-
-  ret = app_ui_init();
   if(ret != TX_SUCCESS)
   {
     return ret;

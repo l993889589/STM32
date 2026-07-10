@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "bsp.h"
+#include "app_health.h"
 #include "ldc_easy.h"
 #include "ldc_port_irq.h"
 
@@ -475,6 +476,7 @@ void app_rs485_task_entry(ULONG thread_input)
     (void)thread_input;
     for(;;)
     {
+        app_health_report(APP_HEALTH_SERVICE_RS485);
         now = app_rs485_now_ms();
 
         if(seen_version != g_config_version)

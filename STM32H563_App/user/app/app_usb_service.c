@@ -10,11 +10,13 @@ __asm(".global __use_no_semihosting\n");
 #endif
 
 #include "app_config.h"
+#include "app_firmware_update_service.h"
 #include "app_shell.h"
 #include "bsp.h"
 #include "ldc_easy.h"
 #include "ldc_port_irq.h"
 #include "ota_layout.h"
+#include "ui_asset_store.h"
 #include "usb_console.h"
 #include "usb_vendor_transport.h"
 
@@ -38,12 +40,21 @@ __asm(".global __use_no_semihosting\n");
 #define APP_OTA_CMD_MANIFEST            3U
 #define APP_OTA_CMD_END                 4U
 #define APP_OTA_CMD_RESET               5U
+#define APP_OTA_CMD_UI_BEGIN            16U
+#define APP_OTA_CMD_UI_DATA             17U
+#define APP_OTA_CMD_UI_COMMIT           18U
+#define APP_OTA_CMD_FW_BEGIN            32U
+#define APP_OTA_CMD_FW_DATA             33U
+#define APP_OTA_CMD_FW_FINISH           34U
+#define APP_OTA_CMD_FW_ABORT            35U
 #define APP_OTA_STATUS_OK               0U
 #define APP_OTA_STATUS_BAD_FRAME        1U
 #define APP_OTA_STATUS_BAD_CRC          2U
 #define APP_OTA_STATUS_BAD_RANGE        3U
 #define APP_OTA_STATUS_FLASH_ERROR      4U
 #define APP_OTA_STATUS_SEQUENCE         5U
+#define APP_OTA_STATUS_NOT_READY        6U
+#define APP_OTA_STATUS_IMAGE_ERROR      7U
 
 static bool g_initialized;
 
@@ -218,6 +229,33 @@ static uint8_t app_ota_erase_range(uint32_t address, uint32_t len)
     return 1U;
 }
 
+static uint8_t app_ota_firmware_status(ota_firmware_update_status_t status)
+{
+    switch(status)
+    {
+    case OTA_FIRMWARE_UPDATE_OK:
+        return APP_OTA_STATUS_OK;
+
+    case OTA_FIRMWARE_UPDATE_NOT_PROVISIONED:
+    case OTA_FIRMWARE_UPDATE_BUSY:
+    case OTA_FIRMWARE_UPDATE_BAD_STATE:
+        return APP_OTA_STATUS_NOT_READY;
+
+    case OTA_FIRMWARE_UPDATE_BAD_RANGE:
+        return APP_OTA_STATUS_BAD_RANGE;
+
+    case OTA_FIRMWARE_UPDATE_SEQUENCE:
+        return APP_OTA_STATUS_SEQUENCE;
+
+    case OTA_FIRMWARE_UPDATE_CRC_MISMATCH:
+    case OTA_FIRMWARE_UPDATE_VERIFY_FAILED:
+        return APP_OTA_STATUS_IMAGE_ERROR;
+
+    default:
+        return APP_OTA_STATUS_FLASH_ERROR;
+    }
+}
+
 static uint8_t app_ota_handle_frame(uint8_t cmd, uint16_t seq, uint32_t address, const uint8_t *payload, uint16_t len)
 {
     uint8_t status = APP_OTA_STATUS_OK;
@@ -293,13 +331,132 @@ static uint8_t app_ota_handle_frame(uint8_t cmd, uint16_t seq, uint32_t address,
         NVIC_SystemReset();
         break;
 
+    case APP_OTA_CMD_UI_BEGIN:
+        if(len != 8U)
+        {
+            status = APP_OTA_STATUS_BAD_FRAME;
+            break;
+        }
+        g_ota_expected_size = app_get_u32_le(payload);
+        g_ota_received_size = 0U;
+        g_ota_expected_seq = (uint16_t)(seq + 1U);
+        g_ota_active = 1U;
+        if(!ui_asset_update_begin(g_ota_expected_size, app_get_u32_le(&payload[4])))
+        {
+            status = APP_OTA_STATUS_FLASH_ERROR;
+            g_ota_active = 0U;
+        }
+        break;
+
+    case APP_OTA_CMD_UI_DATA:
+        if(!g_ota_active || seq != g_ota_expected_seq || address != g_ota_received_size)
+        {
+            status = APP_OTA_STATUS_SEQUENCE;
+            break;
+        }
+        if((g_ota_received_size + len) > g_ota_expected_size)
+        {
+            status = APP_OTA_STATUS_BAD_RANGE;
+            break;
+        }
+        if(!ui_asset_update_write(address, payload, len))
+        {
+            status = APP_OTA_STATUS_FLASH_ERROR;
+            break;
+        }
+        g_ota_received_size += len;
+        g_ota_expected_seq++;
+        break;
+
+    case APP_OTA_CMD_UI_COMMIT:
+        if(!g_ota_active || g_ota_received_size != g_ota_expected_size || len != 0U)
+        {
+            status = APP_OTA_STATUS_SEQUENCE;
+            break;
+        }
+        if(!ui_asset_update_commit())
+        {
+            status = APP_OTA_STATUS_FLASH_ERROR;
+            break;
+        }
+        g_ota_active = 0U;
+        break;
+
+    case APP_OTA_CMD_FW_BEGIN:
+    {
+        ota_firmware_descriptor_t descriptor;
+
+        if(len != sizeof(descriptor))
+        {
+            status = APP_OTA_STATUS_BAD_FRAME;
+            break;
+        }
+
+        memcpy(&descriptor, payload, sizeof(descriptor));
+        status = app_ota_firmware_status(
+            app_firmware_update_service_begin(&descriptor));
+        if(status == APP_OTA_STATUS_OK)
+        {
+            g_ota_expected_address = 0U;
+            g_ota_expected_size = descriptor.image_size;
+            g_ota_received_size = 0U;
+            g_ota_expected_seq = (uint16_t)(seq + 1U);
+            g_ota_active = 1U;
+        }
+        break;
+    }
+
+    case APP_OTA_CMD_FW_DATA:
+        if(!g_ota_active || seq != g_ota_expected_seq || address != g_ota_received_size)
+        {
+            status = APP_OTA_STATUS_SEQUENCE;
+            break;
+        }
+        status = app_ota_firmware_status(
+            app_firmware_update_service_write(address, payload, len));
+        if(status == APP_OTA_STATUS_OK)
+        {
+            g_ota_received_size += len;
+            g_ota_expected_seq++;
+        }
+        break;
+
+    case APP_OTA_CMD_FW_FINISH:
+        if(!g_ota_active || len != 0U || g_ota_received_size != g_ota_expected_size)
+        {
+            status = APP_OTA_STATUS_SEQUENCE;
+            break;
+        }
+        status = app_ota_firmware_status(app_firmware_update_service_finish());
+        if(status == APP_OTA_STATUS_OK)
+        {
+            g_ota_active = 0U;
+        }
+        break;
+
+    case APP_OTA_CMD_FW_ABORT:
+        if(len != 0U)
+        {
+            status = APP_OTA_STATUS_BAD_FRAME;
+            break;
+        }
+        status = app_ota_firmware_status(app_firmware_update_service_abort());
+        g_ota_active = 0U;
+        break;
+
     default:
         status = APP_OTA_STATUS_BAD_FRAME;
         break;
     }
 
     if(status != APP_OTA_STATUS_OK)
+    {
+        if(cmd >= APP_OTA_CMD_FW_BEGIN && cmd <= APP_OTA_CMD_FW_FINISH)
+        {
+            (void)app_firmware_update_service_abort();
+        }
         g_ota_active = 0U;
+    }
 
     app_ota_send_ack(cmd, seq, status);
     return status == APP_OTA_STATUS_OK;
@@ -525,6 +682,8 @@ UINT app_usb_service_init(void)
         return TX_PTR_ERROR;
     if(app_shell_bind_transport(APP_SHELL_TRANSPORT_USB_CDC, app_usb_shell_write, NULL) != 0)
         return TX_PTR_ERROR;
+    if(app_firmware_update_service_init() != OTA_FIRMWARE_UPDATE_OK)
+        return TX_START_ERROR;
 
     memset(&usb_ldc_config, 0, sizeof(usb_ldc_config));
     usb_ldc_config.ring_buffer = g_usb_ldc_ring;

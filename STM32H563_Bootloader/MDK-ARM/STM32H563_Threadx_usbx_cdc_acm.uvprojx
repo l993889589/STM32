@@ -801,6 +801,21 @@
               <FilePath>..\user\ota_boot.h</FilePath>
             </File>
             <File>
+              <FileName>ota_boot_private.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\ota_boot_private.h</FilePath>
+            </File>
+            <File>
+              <FileName>ota_boot_v2.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\ota_boot_v2.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_boot_v2.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\ota_boot_v2.h</FilePath>
+            </File>
+            <File>
               <FileName>ota_layout.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\ota_layout.h</FilePath>

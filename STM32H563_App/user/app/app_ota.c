@@ -1,6 +1,9 @@
 #include "app_ota.h"
 #include "app_board_io.h"
+#include "app_health.h"
+#include "../../../shared/ota/ota_boot_control.h"
 #include "gd25lq128.h"
+#include "main.h"
 #include "ota_layout.h"
 #include <string.h>
 
@@ -102,9 +105,94 @@ static uint8_t app_ota_manifest_store_both(const ota_manifest_t *manifest)
            app_ota_manifest_write(OTA_EXT_MANIFEST_B_ADDR, manifest);
 }
 
+static uint8_t app_ota_control_read(
+    void *context,
+    uint32_t address,
+    uint8_t *data,
+    uint32_t size)
+{
+    (void)context;
+    return gd25lq128_read(address, data, size);
+}
+
+static uint8_t app_ota_control_erase(void *context, uint32_t address)
+{
+    (void)context;
+    return gd25lq128_erase_4k(address);
+}
+
+static uint8_t app_ota_control_write(
+    void *context,
+    uint32_t address,
+    const uint8_t *data,
+    uint32_t size)
+{
+    (void)context;
+    return gd25lq128_write(address, data, size);
+}
+
+/* Return -1 when no v2 record exists, 0 on failure, and 1 on success. */
+static int app_ota_confirm_v2_trial(void)
+{
+    ota_boot_control_storage_t storage;
+    ota_boot_control_record_t record;
+    ota_boot_control_record_t committed;
+    ota_control_copy_t copy;
+    ota_control_status_t status;
+    uint32_t pending_slot;
+
+    storage.context = NULL;
+    storage.read = app_ota_control_read;
+    storage.erase_sector = app_ota_control_erase;
+    storage.write = app_ota_control_write;
+
+    status = ota_boot_control_storage_load(&storage, &record, &copy);
+    if(status == OTA_CONTROL_STATUS_NO_VALID_RECORD)
+    {
+        return -1;
+    }
+    if(status != OTA_CONTROL_STATUS_OK)
+    {
+        return 0;
+    }
+    if(record.state != (uint32_t)OTA_CONTROL_STATE_TRIAL)
+    {
+        return 1;
+    }
+
+    pending_slot = record.pending_slot;
+    if(pending_slot != (uint32_t)OTA_FIRMWARE_SLOT_A &&
+       pending_slot != (uint32_t)OTA_FIRMWARE_SLOT_B)
+    {
+        return 0;
+    }
+
+    if(record.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_A ||
+       record.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_B)
+    {
+        record.slots[record.active_slot].state = (uint32_t)OTA_SLOT_STATE_VERIFIED;
+    }
+    record.slots[pending_slot].state = (uint32_t)OTA_SLOT_STATE_CONFIRMED;
+    record.active_slot = pending_slot;
+    record.pending_slot = (uint32_t)OTA_FIRMWARE_SLOT_NONE;
+    record.state = (uint32_t)OTA_CONTROL_STATE_CONFIRMED;
+    record.trial_boot_count = 0U;
+    record.last_error = (uint32_t)OTA_CONTROL_ERROR_NONE;
+    record.last_error_address = 0U;
+
+    return (ota_boot_control_storage_store(
+                &storage, &record, &committed, &copy) == OTA_CONTROL_STATUS_OK) ? 1 : 0;
+}
+
 uint8_t app_ota_confirm_trial_boot(void)
 {
     ota_manifest_t manifest;
+    int v2_result = app_ota_confirm_v2_trial();
+
+    if(v2_result >= 0)
+    {
+        return (v2_result != 0) ? 1U : 0U;
+    }
 
     if(!app_ota_manifest_load_active(&manifest))
     {
@@ -122,15 +210,35 @@ uint8_t app_ota_confirm_trial_boot(void)
 
 void app_ota_confirm_task_entry(ULONG thread_input)
 {
+    ULONG started_at = tx_time_get();
+    app_health_status_t health;
+
     (void)thread_input;
 
-    tx_thread_sleep(APP_OTA_CONFIRM_DELAY_TICKS);
+    for(;;)
+    {
+        if(app_health_is_ready(
+               APP_OTA_HEALTH_OBSERVATION_TICKS,
+               APP_OTA_HEARTBEAT_STALE_TICKS,
+               &health))
+        {
+            app_ota_log("ota confirm: health gate passed\r\n");
+            if(app_ota_confirm_trial_boot())
+                app_ota_log("ota confirm: ok\r\n");
+            else
+                app_ota_log("ota confirm: failed\r\n");
+            break;
+        }
 
-    app_ota_log("ota confirm: checking trial boot\r\n");
-    if(app_ota_confirm_trial_boot())
-        app_ota_log("ota confirm: ok\r\n");
-    else
-        app_ota_log("ota confirm: skipped or failed\r\n");
+        if((ULONG)(tx_time_get() - started_at) >= APP_OTA_CONFIRM_DEADLINE_TICKS)
+        {
+            app_ota_log("ota confirm: health deadline reset\r\n");
+            tx_thread_sleep(20U);
+            NVIC_SystemReset();
+        }
+
+        tx_thread_sleep(APP_OTA_HEALTH_POLL_TICKS);
+    }
 
     for(;;)
         tx_thread_sleep(TX_WAIT_FOREVER);

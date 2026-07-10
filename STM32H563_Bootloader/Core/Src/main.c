@@ -16,6 +16,8 @@
 #include "gd25lq128.h"
 #include "ota_boot.h"
 #include "ota_layout.h"
+#include "app_threadx.h"
+#include "boot_shell.h"
 
 void SystemClock_Config(void);
 
@@ -116,6 +118,7 @@ static void Boot_JumpToApp(void)
 int main(void)
 {
   gd25lq128_id_t id;
+  ota_boot_result_t boot_result = OTA_BOOT_RESULT_NO_UPDATE;
 
   HAL_Init();
   Boot_LedInit();
@@ -130,7 +133,8 @@ int main(void)
   {
     Boot_LedBlink(80U, 80U);
     Boot_LedBlink(80U, 200U);
-    if(ota_boot_process_update() == OTA_BOOT_RESULT_INSTALLED)
+    boot_result = ota_boot_process_update();
+    if(boot_result == OTA_BOOT_RESULT_INSTALLED)
     {
       Boot_LedBlink(60U, 60U);
       Boot_LedBlink(60U, 60U);
@@ -142,10 +146,13 @@ int main(void)
     Boot_LedBlink(400U, 400U);
   }
 
-  if(Boot_AppIsValid())
+  if(boot_result != OTA_BOOT_RESULT_RECOVERY_REQUIRED && Boot_AppIsValid())
   {
     Boot_JumpToApp();
   }
+
+  boot_shell_set_boot_result(boot_result);
+  MX_ThreadX_Init();
 
   while(1)
   {

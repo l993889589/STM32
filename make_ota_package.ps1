@@ -10,7 +10,7 @@ $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $FromElf = "C:\Keil_v5\ARM\ARMCLANG\bin\fromelf.exe"
-$AppAxf = Join-Path $Root "STM32H563_Threadx_usbx_cdc_acm\MDK-ARM\STM32H563_Threadx_usbx_cdc_acm\STM32H563_Threadx_usbx_cdc_acm.axf"
+$AppAxf = Join-Path $Root "STM32H563_App\MDK-ARM\STM32H563_Threadx_usbx_cdc_acm\STM32H563_Threadx_usbx_cdc_acm.axf"
 
 if ([string]::IsNullOrWhiteSpace($InputFile)) {
   $InputFile = $AppAxf
@@ -35,7 +35,7 @@ $OTA_MANIFEST_MAGIC = [uint32]0x4F54414D
 $OTA_MANIFEST_VERSION = [uint32]1
 $OTA_BOOT_STATE_PENDING_UPDATE = [uint32]1
 $OTA_APP_BASE = [uint32]$AppBase
-$OTA_EXT_DOWNLOAD_ADDR = [uint32]0x00100000
+$OTA_EXT_DOWNLOAD_ADDR = [uint32]0x00010000
 $MANIFEST_SIZE = 188
 
 function Update-Crc32 {
