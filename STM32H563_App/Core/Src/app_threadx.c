@@ -58,7 +58,8 @@ static UCHAR app_rs485_thread_stack[2048];
 static UCHAR app_led_thread_stack[512];
 static UCHAR app_tick_thread_stack[512];
 static UCHAR app_w800_thread_stack[8192];
-static UCHAR app_ota_confirm_thread_stack[2048];
+/* Confirmation performs control-record and legacy manifest I/O after 60 s. */
+static UCHAR app_ota_confirm_thread_stack[6144];
 static UCHAR app_ui_thread_stack[6144];
 
 /* USER CODE END PV */

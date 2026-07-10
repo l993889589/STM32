@@ -128,6 +128,7 @@ static void provision_active_slot_a(fake_firmware_flash_t *flash)
     record.slots[OTA_FIRMWARE_SLOT_A].image_crc32 = 0x12345678U;
     record.slots[OTA_FIRMWARE_SLOT_A].load_address = OTA_APP_BASE;
     record.slots[OTA_FIRMWARE_SLOT_A].entry_address = OTA_APP_BASE + 0x101U;
+    record.minimum_version = record.slots[OTA_FIRMWARE_SLOT_A].image_version;
 
     TEST_CHECK(ota_boot_control_storage_store(&storage, &record, &committed, &copy) ==
                OTA_CONTROL_STATUS_OK);
@@ -185,6 +186,54 @@ static void test_incomplete_download_preserves_active_slot(void)
     {
         TEST_CHECK(flash.bytes[OTA_EXT_FIRMWARE_SLOT_A_ADDR + index] == 0xA5U);
     }
+
+    free(flash.bytes);
+}
+
+static void test_rollback_version_rejected_before_erase(void)
+{
+    fake_firmware_flash_t flash;
+    ota_firmware_update_storage_t storage;
+    ota_boot_control_storage_t control_storage;
+    ota_boot_control_record_t control;
+    ota_firmware_update_t update;
+    ota_firmware_descriptor_t descriptor;
+    ota_control_copy_t copy;
+    uint8_t image[TEST_IMAGE_SIZE];
+    uint32_t index;
+
+    flash.bytes = (uint8_t *)malloc(TEST_FLASH_SIZE);
+    TEST_CHECK(flash.bytes != NULL);
+    if(flash.bytes == NULL)
+    {
+        return;
+    }
+    memset(flash.bytes, 0xFF, TEST_FLASH_SIZE);
+    flash.fail_writes = 0U;
+    memset(image, 0xA6, sizeof(image));
+    provision_active_slot_a(&flash);
+    make_descriptor(&descriptor, image, sizeof(image));
+    descriptor.image_version = 2026070900U;
+    storage = fake_storage(&flash);
+
+    TEST_CHECK(ota_firmware_update_init(&update, &storage) == OTA_FIRMWARE_UPDATE_OK);
+    TEST_CHECK(ota_firmware_update_begin(&update, &descriptor) ==
+               OTA_FIRMWARE_UPDATE_VERSION_ROLLBACK);
+    TEST_CHECK(update.is_active == 0U);
+
+    for(index = 0U; index < TEST_IMAGE_SIZE; index++)
+    {
+        TEST_CHECK(flash.bytes[OTA_EXT_FIRMWARE_SLOT_B_ADDR + index] == 0xFFU);
+    }
+
+    control_storage.context = &flash;
+    control_storage.read = fake_read;
+    control_storage.erase_sector = fake_erase;
+    control_storage.write = fake_write;
+    TEST_CHECK(ota_boot_control_storage_load(&control_storage, &control, &copy) ==
+               OTA_CONTROL_STATUS_OK);
+    TEST_CHECK(control.state == OTA_CONTROL_STATE_CONFIRMED);
+    TEST_CHECK(control.pending_slot == OTA_FIRMWARE_SLOT_NONE);
 
     free(flash.bytes);
 }
@@ -340,6 +389,7 @@ int main(void)
     test_incomplete_download_preserves_active_slot();
     test_complete_download_becomes_pending();
     test_bad_crc_never_becomes_pending();
+    test_rollback_version_rejected_before_erase();
     test_recovery_provisions_first_slot();
 
     if(test_failures != 0)

@@ -103,15 +103,27 @@ static void Boot_JumpToApp(void)
     NVIC->ICPR[i] = 0xFFFFFFFFUL;
   }
 
+  /* Remove pending system exceptions that are not covered by NVIC ICPR. */
+  SCB->ICSR = SCB_ICSR_PENDSVCLR_Msk | SCB_ICSR_PENDSTCLR_Msk;
+  SCB->CFSR = SCB->CFSR;
+  SCB->HFSR = SCB->HFSR;
+  SCB->DFSR = SCB->DFSR;
+
   SCB->VTOR = OTA_APP_BASE;
   __DSB();
   __ISB();
 
+  /* Recreate reset-like core state before the application owns its stack. */
+  __set_PSP(0U);
+  __set_PSPLIM(0U);
+  __set_MSPLIM(0U);
+  __set_BASEPRI(0U);
+  __set_FAULTMASK(0U);
   __set_CONTROL(0U);
   __set_MSP(app_sp);
+  __set_PRIMASK(0U);
   __DSB();
   __ISB();
-  __enable_irq();
   app_entry();
 }
 
@@ -229,7 +241,7 @@ void Error_Handler(void)
   __disable_irq();
   while(1)
   {
-    Boot_LedBlink(50U, 50U);
+    Boot_LedBlink(100U, 100U);
   }
 }
 

@@ -11,7 +11,7 @@ Boot independently performs these checks before internal flash programming:
 
 1. External slot bounds, vector range and whole-image CRC32.
 2. Whole-image SHA-256 against the signed descriptor.
-3. Raw P-256 `r||s` signature using the STM32H563 PKA.
+3. Raw P-256 `r||s` signature using the Boot-local micro-ecc secp256r1 verifier.
 4. Image version against the larger of the compiled floor and confirmed floor.
 
 The confirmed version floor blocks remote and normal software downgrade. A
@@ -19,6 +19,11 @@ physical attacker able to replace both the SPI NOR and its control records can
 replay an older signed package unless a device-specific OTP monotonic counter or
 secure element is provisioned. That stronger physical anti-rollback policy is a
 product security decision, not silently claimed by this implementation.
+
+STM32H563 does not contain the PKA accelerator present on some other STM32H5
+parts. Do not enable the shared HAL PKA driver for this target. Boot compiles
+micro-ecc in verify-only secp256r1 configuration; its BSD-2-Clause notice and
+exact imported revision are recorded in `docs/THIRD_PARTY_NOTICES.md`.
 
 ## Release Package
 
@@ -61,9 +66,14 @@ development board.
 2. App downloads 4096-byte HTTP Ranges into the inactive external slot.
 3. Every Range CRC is checked before write; the complete CRC32 and SHA-256 are
    checked before the pending slot is published atomically.
-4. Reboot lets Boot authenticate and install the pending slot.
+4. App publishes one `firmware-ready` status and resets automatically; Boot then
+   authenticates and installs the pending slot.
 5. App confirms only after 60 seconds of RS485, W800 and UI scheduler health.
 6. Failed trials are retried and then automatically restore the confirmed slot.
+
+The App performs a bandwidth-saving version-floor check before the first HTTP
+request. This is not the security boundary: Boot independently checks the signed
+descriptor and confirmed floor before erasing internal App flash.
 
 ## Recovery
 

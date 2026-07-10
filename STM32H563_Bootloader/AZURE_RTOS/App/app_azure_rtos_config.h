@@ -45,7 +45,8 @@ extern "C" {
 
 #define TX_APP_MEM_POOL_SIZE                     20480
 
-#define UX_DEVICE_APP_MEM_POOL_SIZE              10240
+/* USBX 4 KiB system memory plus the 8 KiB recovery thread and pool overhead. */
+#define UX_DEVICE_APP_MEM_POOL_SIZE              (20U * 1024U)
 
 /* USER CODE BEGIN EC */
 

@@ -358,13 +358,18 @@ static uint8_t ota_verify_ext_image(uint32_t address, uint32_t size, uint32_t ex
 
 static uint32_t ota_flash_bank_from_address(uint32_t address)
 {
-    return (address < (FLASH_BASE + FLASH_BANK_SIZE)) ? FLASH_BANK_1 : FLASH_BANK_2;
+    const uint32_t bank_size = OTA_INTERNAL_FLASH_SIZE / 2U;
+
+    return (address < (OTA_INTERNAL_FLASH_BASE + bank_size)) ?
+           FLASH_BANK_1 : FLASH_BANK_2;
 }
 
 static uint32_t ota_flash_sector_from_address(uint32_t address)
 {
+    const uint32_t bank_size = OTA_INTERNAL_FLASH_SIZE / 2U;
     const uint32_t bank_base = (ota_flash_bank_from_address(address) == FLASH_BANK_1) ?
-                              FLASH_BASE : (FLASH_BASE + FLASH_BANK_SIZE);
+                              OTA_INTERNAL_FLASH_BASE :
+                              (OTA_INTERNAL_FLASH_BASE + bank_size);
 
     return (address - bank_base) / FLASH_SECTOR_SIZE;
 }
@@ -380,9 +385,10 @@ static uint8_t ota_flash_erase_app(uint32_t image_size)
         FLASH_EraseInitTypeDef erase = {0};
         uint32_t sector_error = 0xFFFFFFFFU;
         const uint32_t bank = ota_flash_bank_from_address(current);
+        const uint32_t bank_size = OTA_INTERNAL_FLASH_SIZE / 2U;
         const uint32_t bank_end = (bank == FLASH_BANK_1) ?
-                                  (FLASH_BASE + FLASH_BANK_SIZE) :
-                                  (FLASH_BASE + FLASH_SIZE);
+                                  (OTA_INTERNAL_FLASH_BASE + bank_size) :
+                                  (OTA_INTERNAL_FLASH_BASE + OTA_INTERNAL_FLASH_SIZE);
         const uint32_t erase_end = (app_end < bank_end) ? app_end : bank_end;
         const uint32_t first_sector = ota_flash_sector_from_address(current);
         const uint32_t last_sector = ota_flash_sector_from_address(erase_end - 1U);

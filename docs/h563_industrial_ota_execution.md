@@ -14,10 +14,10 @@ complete only when its stated tests and evidence are recorded here.
 | 4. Boot install and rollback | Complete | INSTALLING retry, 3-attempt trial rollback, v1 migration tests |
 | 5. App download and health confirmation | Complete | 4 KiB Range, block/whole CRC, SHA-256 and health-gated confirmation |
 | 6. Independent USB recovery | Complete | Boot LDOT v2 parser is binary-safe and host fragmentation-tested |
-| 7. Signature and anti-rollback | Complete | P-256 package, Boot PKA verifier, tamper/downgrade tests, WRP policy |
+| 7. Signature and anti-rollback | Complete | P-256 package, Boot micro-ecc verifier, tamper/downgrade tests, WRP policy |
 | 8. Diagnostics | Complete | Boot/App shell and MQTT expose slot, health, reset and control errors |
-| 9. Fault injection | In progress | Host matrix complete; final board install/trial observation pending |
-| 10. Production release | In progress | Reproducible release tool/runbook added; final GitHub push pending |
+| 9. Fault injection | Complete | Real 503 retry, A/B install, automatic reset, trial confirmation and downgrade rejection |
+| 10. Production release | Complete | Reproducible release/runbook, 9 host tests and final hardware record complete |
 
 ## Current Decisions
 
@@ -26,13 +26,15 @@ complete only when its stated tests and evidence are recorded here.
 - The internal App remains linked at `0x08020000`.
 - External firmware A/B slots are each 2 MiB.
 - MQTT carries commands and low-rate status; HTTP Range carries firmware data.
+- App rejects versions below the confirmed floor before opening HTTP; Boot repeats
+  signature and rollback checks as the authoritative security boundary.
 - Bootloader network update and delta firmware are outside the first scope.
 - New project-owned files and public functions require purpose and usage comments.
 
 ## Verified Build And Test Evidence
 
-- Boot: Code 93402, RO 2910, RW 120, ZI 40136; 0 errors, 0 warnings.
-- App: Code 461064, RO 400100, RW 2048, ZI 385152; 0 errors, 0 warnings.
+- Boot: Code 116842, RO 3114, RW 120, ZI 57576; 0 errors, 0 warnings.
+- App: Code 461376, RO 400152, RW 2048, ZI 393344; 0 errors, 0 warnings.
 - Metadata: every one of 348 interrupted write positions preserves a valid copy.
 - Firmware transaction: incomplete, out-of-order, CRC-failed and SHA-failed images
   never become pending or overwrite the active slot.
@@ -40,6 +42,23 @@ complete only when its stated tests and evidence are recorded here.
 - Signature: valid package passes; changed signed metadata and changed image fail.
 - Boot policy: interrupted install retries, invalid candidate restores active image,
   and an unconfirmed trial rolls back after three boot attempts.
+- Hardware: `2026071022` confirmed in slot A, `2026071023` automatically rebooted
+  and confirmed in slot B, and final `2026071024` automatically confirmed in slot A.
+- Hardware downgrade: Boot rejected `2026071022` with error 14 while retaining
+  `2026071023`; final App rejected `2026071023` at zero received bytes with no Range.
+
+## Hardware Defects Found And Closed
+
+- STM32H563 has no PKA peripheral. Shared H5 headers exposed PKA register types,
+  but `INITOK` never asserted. Boot now uses the reviewed micro-ecc secp256r1
+  verify-only path and has positive/tamper host tests plus a board signature test.
+- Reading the HAL `FLASH_SIZE` system-information address faulted in the current
+  security state. Boot now uses the fixed, validated 2 MiB H563 flash layout.
+- Boot MSP, Boot USB and App shell/confirmation stacks were increased after real
+  stack-pressure failures. Boot-to-App jump now clears pending exceptions and
+  resets MSP/PSP, limits and interrupt masks before entering the App vector.
+- Closing the Electron control window used to stop MQTT and HTTP. The release now
+  keeps device services alive headlessly and recreates the window on next launch.
 
 ## Commit Policy
 

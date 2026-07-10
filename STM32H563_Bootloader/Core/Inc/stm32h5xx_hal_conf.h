@@ -67,7 +67,8 @@
 /*#define HAL_OPAMP_MODULE_ENABLED */
 /*#define HAL_XSPI_MODULE_ENABLED */
 /*#define HAL_OTFDEC_MODULE_ENABLED */
-#define HAL_PKA_MODULE_ENABLED
+/* STM32H563 has no PKA accelerator; Boot uses software ECDSA verification. */
+/*#define HAL_PKA_MODULE_ENABLED */
 /*#define HAL_RNG_MODULE_ENABLED */
 /*#define HAL_RTC_MODULE_ENABLED */
 /*#define HAL_SAI_MODULE_ENABLED */

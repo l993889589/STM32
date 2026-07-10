@@ -29,9 +29,9 @@ rejects a sidecar whose size or CRC differs from the binary.
   "host": "192.168.1.4",
   "port": 8088,
   "path": "/firmware/app.bin",
-  "version": 2026071017,
-  "size": 860480,
-  "crc32": 127781372,
+  "version": 2026071024,
+  "size": 861728,
+  "crc32": 772753644,
   "imageFlags": 2,
   "sha256": "29A77359ECD2EEF8BC484900B21624E19309DA3D5A8321AE5F6A50F9752D39BA",
   "signature": "<128 hex characters: raw P-256 r||s>",
@@ -42,11 +42,17 @@ rejects a sidecar whose size or CRC differs from the binary.
 
 The application validates the entry address against internal App flash, chooses
 the non-active external firmware slot, and stores only slot-relative offsets.
+It rejects an image version below the confirmed floor before opening HTTP.
 Each response block must match its Range CRC. After the final block, the shared
 transaction rereads the complete external image, validates the image CRC, and
 validates SHA-256 before it atomically transitions `VERIFIED -> PENDING`. Boot
 re-hashes the selected external slot and verifies the signed descriptor with
 the compiled P-256 public key before touching internal App flash.
+
+After the transaction reaches PENDING, the App publishes
+`mode="firmware-ready"`, waits one second for the status frame to leave, and
+resets the MCU. No operator reboot is required. The next App confirms only after
+the health policy below succeeds.
 
 The desktop assistant also exposes a loopback-only acceptance endpoint:
 
@@ -81,3 +87,7 @@ slave response are not health requirements. A missing/stale required heartbeat
 or ThreadX stack fault prevents confirmation. At 120 seconds without health,
 the application resets so the bootloader can count the failed trial and roll
 back after the configured limit.
+
+During a blocking firmware transfer, ordinary MQTT telemetry is suppressed but
+bounded keepalive traffic remains. MQTT carries no firmware payload and is not
+used as a binary-data fallback.

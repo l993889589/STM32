@@ -160,6 +160,12 @@ static ota_firmware_update_status_t ota_firmware_update_begin_internal(
         return status;
     }
 
+    /* Reject stale packages before erasing a target slot or receiving bytes. */
+    if(descriptor->image_version < update->control.minimum_version)
+    {
+        return OTA_FIRMWARE_UPDATE_VERSION_ROLLBACK;
+    }
+
     if(recovery_mode == 0U &&
        update->control.state != (uint32_t)OTA_CONTROL_STATE_CONFIRMED &&
        update->control.state != (uint32_t)OTA_CONTROL_STATE_DOWNLOADING &&

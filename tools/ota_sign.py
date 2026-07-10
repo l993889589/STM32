@@ -1,7 +1,7 @@
 """Create P-256 OTA keys and sign H563 firmware manifests.
 
 Private keys are supplied by path and are never written into the repository.
-The firmware signature is fixed-width, big-endian r||s for STM32 PKA.
+The firmware signature is fixed-width, big-endian r||s for the Boot P-256 verifier.
 """
 
 from __future__ import annotations

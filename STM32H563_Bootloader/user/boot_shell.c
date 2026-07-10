@@ -172,17 +172,76 @@ static int boot_cmd_ota(shell_t *shell, int argc, char **argv, void *arg)
 static int boot_cmd_security(shell_t *shell, int argc, char **argv, void *arg)
 {
     boot_protection_status_t protection;
+    boot_security_diagnostics_t diagnostics;
+    ota_boot_control_storage_t storage;
+    ota_boot_control_record_t record;
+    ota_control_copy_t copy;
+    uint32_t verify_error = 0U;
+    uint32_t verify_slot = (uint32_t)OTA_FIRMWARE_SLOT_NONE;
+    uint8_t verify_result = 0U;
 
-    (void)argc;
-    (void)argv;
     (void)arg;
+    if(argc > 2 || (argc == 2 && strcmp(argv[1], "verify") != 0))
+    {
+        return shell_write(shell, "usage: security [verify]\r\n");
+    }
+    if(argc == 2)
+    {
+        storage.context = NULL;
+        storage.read = boot_shell_control_read;
+        storage.erase_sector = boot_shell_control_erase;
+        storage.write = boot_shell_control_write;
+        if(ota_boot_control_storage_load(&storage, &record, &copy) !=
+           OTA_CONTROL_STATUS_OK)
+        {
+            return shell_write(shell, "security verify: control unavailable\r\n");
+        }
+        if(record.pending_slot == (uint32_t)OTA_FIRMWARE_SLOT_A ||
+           record.pending_slot == (uint32_t)OTA_FIRMWARE_SLOT_B)
+        {
+            verify_slot = record.pending_slot;
+        }
+        else if(record.slots[0].state != (uint32_t)OTA_SLOT_STATE_EMPTY)
+        {
+            verify_slot = (uint32_t)OTA_FIRMWARE_SLOT_A;
+        }
+        else if(record.slots[1].state != (uint32_t)OTA_SLOT_STATE_EMPTY)
+        {
+            verify_slot = (uint32_t)OTA_FIRMWARE_SLOT_B;
+        }
+        if(verify_slot == (uint32_t)OTA_FIRMWARE_SLOT_NONE)
+        {
+            return shell_write(shell, "security verify: no firmware slot\r\n");
+        }
+        verify_result = boot_security_verify_slot(&record, verify_slot, &verify_error);
+    }
     boot_protection_get_status(&protection);
-    return shell_printf(shell,
-                        "signature=ECDSA-P256 key=9B6DB882D4D4D93F floor=%lu wrp=%s mask=0x%08lX required=0x%08lX\r\n",
-                        (unsigned long)OTA_BOOT_COMPILED_MINIMUM_VERSION,
-                        protection.boot_fully_protected ? "protected" : "open",
-                        (unsigned long)protection.protected_sector_groups,
-                        (unsigned long)protection.required_sector_groups);
+    boot_security_get_diagnostics(&diagnostics);
+    (void)shell_printf(shell,
+                       "signature=ECDSA-P256 key=9B6DB882D4D4D93F floor=%lu wrp=%s mask=0x%08lX required=0x%08lX\r\n",
+                       (unsigned long)OTA_BOOT_COMPILED_MINIMUM_VERSION,
+                       protection.boot_fully_protected ? "protected" : "open",
+                       (unsigned long)protection.protected_sector_groups,
+                       (unsigned long)protection.required_sector_groups);
+    (void)shell_printf(shell,
+                       "verify backend=%s attempted=%u status=%lu valid=%u digest=%02X%02X%02X%02X%02X%02X%02X%02X\r\n",
+                       diagnostics.backend == BOOT_SECURITY_BACKEND_MICRO_ECC ?
+                           "micro-ecc" : "none",
+                       diagnostics.attempted,
+                       (unsigned long)diagnostics.verify_status,
+                       diagnostics.signature_valid,
+                       diagnostics.digest[0], diagnostics.digest[1],
+                       diagnostics.digest[2], diagnostics.digest[3],
+                       diagnostics.digest[4], diagnostics.digest[5],
+                       diagnostics.digest[6], diagnostics.digest[7]);
+    if(argc == 2)
+    {
+        return shell_printf(shell, "verify slot=%lu result=%u error=%lu\r\n",
+                            (unsigned long)verify_slot,
+                            verify_result,
+                            (unsigned long)verify_error);
+    }
+    return 0;
 }
 
 static int boot_cmd_flash(shell_t *shell, int argc, char **argv, void *arg)
@@ -238,7 +297,7 @@ static const shell_command_t g_boot_commands[] =
     {"slot", "slot", "show application slot", boot_cmd_slot, NULL},
     {"verify", "verify", "validate the application vector", boot_cmd_verify, NULL},
     {"ota", "ota status", "show the last OTA boot result", boot_cmd_ota, NULL},
-    {"security", "security", "show trust anchor and Boot WRP status", boot_cmd_security, NULL},
+    {"security", "security [verify]", "show or run firmware signature verification", boot_cmd_security, NULL},
     {"flash-info", "flash-info", "show external flash identity", boot_cmd_flash, NULL},
     {"boot", "boot", "reboot into a valid application", boot_cmd_boot, NULL},
     {"reboot", "reboot", "software reset the MCU", boot_cmd_reboot, NULL},

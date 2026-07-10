@@ -249,6 +249,7 @@ static uint8_t app_ota_firmware_status(ota_firmware_update_status_t status)
 
     case OTA_FIRMWARE_UPDATE_CRC_MISMATCH:
     case OTA_FIRMWARE_UPDATE_SHA256_MISMATCH:
+    case OTA_FIRMWARE_UPDATE_VERSION_ROLLBACK:
     case OTA_FIRMWARE_UPDATE_VERIFY_FAILED:
         return APP_OTA_STATUS_IMAGE_ERROR;
 

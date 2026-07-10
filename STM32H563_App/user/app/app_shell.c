@@ -31,7 +31,8 @@
 #define APP_CONSOLE_LDC_MAX_FRAME   256U
 #define APP_CONSOLE_TIMEOUT_MS      20U
 #define APP_SHELL_PACKET_COUNT      8U
-#define APP_SHELL_THREAD_STACK      2048U
+/* Detailed OTA diagnostics and formatted output peak above the old 2 KiB stack. */
+#define APP_SHELL_THREAD_STACK      6144U
 #define APP_SHELL_TX_WAIT_TICKS     100U
 
 static shell_t g_app_shell;

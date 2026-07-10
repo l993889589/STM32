@@ -218,6 +218,8 @@ static uint32_t g_http_debug_stt_count;
 static uint32_t g_http_debug_stt_rx_max;
 static uint16_t g_http_debug_header_len;
 static uint32_t g_http_direct_chunk_size = APP_W800_HTTP_RANGE_DEFAULT;
+/* Set only after the inactive firmware slot is fully verified and pending. */
+static uint8_t g_firmware_reboot_pending;
 
 typedef struct
 {
@@ -2846,10 +2848,22 @@ static bool app_w800_http_direct_range_download_asset(void)
     memcpy(firmware_descriptor.signature, g_http_update.signature,
            sizeof(firmware_descriptor.signature));
 
-    if((firmware_target &&
-        app_firmware_update_service_begin(&firmware_descriptor) != OTA_FIRMWARE_UPDATE_OK) ||
-       (!firmware_target &&
-        !ui_asset_update_begin(g_http_update.size, g_http_update.version)))
+    if(firmware_target)
+    {
+        ota_firmware_update_status_t begin_status =
+            app_firmware_update_service_begin(&firmware_descriptor);
+
+        if(begin_status != OTA_FIRMWARE_UPDATE_OK)
+        {
+            app_w800_http_set_error(
+                begin_status == OTA_FIRMWARE_UPDATE_VERSION_ROLLBACK ?
+                "version rollback" : "begin");
+            g_http_update.pending = 0U;
+            g_publish_status_requested = 1U;
+            return false;
+        }
+    }
+    else if(!ui_asset_update_begin(g_http_update.size, g_http_update.version))
     {
         app_w800_http_set_error("begin");
         g_http_update.pending = 0U;
@@ -2911,6 +2925,8 @@ static bool app_w800_http_direct_range_download_asset(void)
         g_http_update.state = APP_W800_HTTP_DONE;
         g_http_update.pending = 0U;
         g_publish_status_requested = 1U;
+        if(firmware_target)
+            g_firmware_reboot_pending = 1U;
         return true;
     }
 
@@ -3395,6 +3411,15 @@ void app_w800_task_entry(ULONG thread_input)
                 (void)app_w800_http_download_asset();
                 last_command_fetch_ms = app_w800_now_ms(NULL);
                 g_publish_status_requested = 1U;
+                break;
+            }
+
+            if(g_firmware_reboot_pending != 0U)
+            {
+                g_firmware_reboot_pending = 0U;
+                (void)app_w800_mqtt_publish_status("firmware-ready");
+                tx_thread_sleep(1000U);
+                NVIC_SystemReset();
                 break;
             }
 
