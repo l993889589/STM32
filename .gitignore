@@ -23,6 +23,8 @@ tools/*.out.log
 **/MDK-ARM/STM32H563_Modbus_DMA/
 **/MDK-ARM/STM32H563_Modbus_ThreadX_IT/
 **/MDK-ARM/STM32H563_Modbus_ThreadX_DMA/
+**/MDK-ARM/stm32_h563_modbus*/
+**/MDK-ARM/DebugConfig/
 **/MDK-ARM/DebugConfig/STM32H563_Modbus*_STM32H563RIVx_1.0.0.dbgconf
 **/MDK-ARM/stm32_h563_baremetal/
 **/*.uvguix.*
@@ -66,3 +68,5 @@ stm32-h563/
 
 # Local W800 credentials
 STM32H563_Modbus/user/app/modbus_network_config_local.h
+STM32H563_Modbus/luoji/user/app/modbus_network_config_local.h
+STM32H563_Modbus/THREADX/user/app/modbus_network_config_local.h
