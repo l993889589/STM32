@@ -18,7 +18,7 @@ Modbus RTU 回归；裸机 IT 保留此前的 16/16 基线。
 - MCU：STM32H563RIV6。
 - HSE：25 MHz；SYSCLK：250 MHz。
 - RS485-1：USART2，PA2/PA3，115200 8N1，MAX13487 自动方向。
-- DMA：GPDMA1 Channel 1，Request USART2_RX，IRQ 优先级 10。
+- DMA：GPDMA1 Channel 1 / 2 分别负责 USART2 RX / TX，IRQ 优先级 10。
 - ThreadX：1 kHz SysTick；HAL 1 ms 时基改用 TIM17。
 - ThreadX 任务：Modbus 优先级 10、静态栈 2048 bytes；LED 优先级 20、静态栈
   512 bytes。
@@ -38,6 +38,10 @@ DMA 使用静态 64-byte、32-byte 对齐接收块和 512-byte 环形缓冲。HT
 段并保存偏移；后续 IDLE/TC 只搬运新增部分，避免同一字节重复进入 LDC。DMA 区域在
 CPU 读取前执行 cache invalidate，同时记录 HT、IDLE、TC、overflow、error 和 restart
 计数。
+
+DMA 目标的发送也使用真实 GPDMA，而不是继续调用 polling HAL。TX 缓冲发送前执行
+cache clean，完成、错误和超时分别计数；ThreadX DMA 的 16/16 从站回归及板端三步
+主机回归都覆盖了 TX DMA。IT 目标保留 polling TX，使用相同上层 transport API。
 
 ## ThreadX 端口坑
 
@@ -68,8 +72,15 @@ tx_thread_secure_stack.c:282: error: call to undeclared function '__TZ_get_PSPLI
 - Server：创建 listener、查询接入子 socket、处理完整 ADU 并发送响应。
 - 主从共用 `SKSND`/`SKRCV` 二进制定长窗口。
 
-网络代码已进入四个 Keil 目标并构建通过；实际 Wi-Fi/TCP 实机验收仍需要单独提供
-SSID、密码和局域网测试端点。
+网络代码已进入四个 Keil 目标；Server 启用分支在四目标 0/0，Client 启用分支在裸机
+IT 和 ThreadX DMA 0/0。运行错误会关闭 socket、清理静态上下文并延时重连。实际
+Wi-Fi/TCP 实机验收仍需要单独提供 SSID、密码和局域网测试端点。
+
+## RTU 主机
+
+保持寄存器 60 的 `0x4D53` 命令触发一个不阻塞的 RTU 主机验收序列：FC03 读取身份、
+FC06 写 `0x55AA`、FC03 读回。裸机 IT 和 ThreadX DMA 均与 COM3 模拟从站完成三步，
+只有有效响应才会推进状态，随后自动恢复板端从站。
 
 ## 构建与烧录
 

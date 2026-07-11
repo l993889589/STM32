@@ -792,6 +792,7 @@
             <File><FileName>ld_modbus_client.c</FileName><FileType>1</FileType><FilePath>..\Middlewares\ld_modbus\src\ld_modbus_client.c</FilePath></File>
             <File><FileName>transport_w800_tcp.c</FileName><FileType>1</FileType><FilePath>..\user\transport\transport_w800_tcp.c</FilePath></File>
             <File><FileName>modbus_tcp_w800.c</FileName><FileType>1</FileType><FilePath>..\user\app\modbus_tcp_w800.c</FilePath></File>
+            <File><FileName>modbus_network_app.c</FileName><FileType>1</FileType><FilePath>..\user\app\modbus_network_app.c</FilePath></File>
             <File><FileName>at_core.c</FileName><FileType>1</FileType><FilePath>..\user\at\core\at_core.c</FilePath></File>
             <File><FileName>at_urc.c</FileName><FileType>1</FileType><FilePath>..\user\at\core\at_urc.c</FilePath></File>
             <File><FileName>at_session.c</FileName><FileType>1</FileType><FilePath>..\user\at\core\at_session.c</FilePath></File>
@@ -1133,7 +1134,7 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_HAL_DRIVER,STM32H563xx,MODBUS_UART_RX_DMA=1</Define>
+              <Define>USE_HAL_DRIVER,STM32H563xx,MODBUS_UART_RX_DMA=1,MODBUS_UART_TX_DMA=1</Define>
               <Undefine></Undefine>
               <IncludePath>../Core/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Drivers/CMSIS/Include;../user/app;../user/bsp;../user/ldc/core;../user/osal;../user/transport;../Middlewares/ld_modbus/include;../Middlewares/ld_modbus/integrations/ldc;../user/at/core;../user/at/modules</IncludePath>
             </VariousControls>
@@ -1151,7 +1152,7 @@
             <ClangAsOpt>1</ClangAsOpt>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_HAL_DRIVER,STM32H563xx,MODBUS_UART_RX_DMA=1</Define>
+              <Define>USE_HAL_DRIVER,STM32H563xx,MODBUS_UART_RX_DMA=1,MODBUS_UART_TX_DMA=1</Define>
               <Undefine></Undefine>
               <IncludePath>../Core/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc;../Drivers/STM32H5xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32H5xx/Include;../Drivers/CMSIS/Include;../user/app;../user/bsp;../user/ldc/core;../user/osal;../user/transport;../Middlewares/ld_modbus/include;../Middlewares/ld_modbus/integrations/ldc;../user/at/core;../user/at/modules</IncludePath>
             </VariousControls>
@@ -1587,6 +1588,7 @@
             <File><FileName>ld_modbus_client.c</FileName><FileType>1</FileType><FilePath>..\Middlewares\ld_modbus\src\ld_modbus_client.c</FilePath></File>
             <File><FileName>transport_w800_tcp.c</FileName><FileType>1</FileType><FilePath>..\user\transport\transport_w800_tcp.c</FilePath></File>
             <File><FileName>modbus_tcp_w800.c</FileName><FileType>1</FileType><FilePath>..\user\app\modbus_tcp_w800.c</FilePath></File>
+            <File><FileName>modbus_network_app.c</FileName><FileType>1</FileType><FilePath>..\user\app\modbus_network_app.c</FilePath></File>
             <File><FileName>at_core.c</FileName><FileType>1</FileType><FilePath>..\user\at\core\at_core.c</FilePath></File>
             <File><FileName>at_urc.c</FileName><FileType>1</FileType><FilePath>..\user\at\core\at_urc.c</FilePath></File>
             <File><FileName>at_session.c</FileName><FileType>1</FileType><FilePath>..\user\at\core\at_session.c</FilePath></File>

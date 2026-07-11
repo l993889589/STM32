@@ -63,3 +63,6 @@ simulators/lvgl/build_output.txt
 
 # Local nested scratch repository
 stm32-h563/
+
+# Local W800 credentials
+STM32H563_Modbus/user/app/modbus_network_config_local.h

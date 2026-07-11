@@ -13,15 +13,24 @@
 #include "bsp_led.h"
 #include "bsp_pwm.h"
 #include "modbus_app.h"
+#include "modbus_network_app.h"
+#include "modbus_network_config.h"
 #include "tx_api.h"
 
 #define MODBUS_THREAD_STACK_BYTES (2048U)
 #define LED_THREAD_STACK_BYTES    (512U)
+#define NETWORK_THREAD_STACK_BYTES (3072U)
 
 static TX_THREAD modbus_thread;
 static TX_THREAD led_thread;
+#if MODBUS_W800_ENABLE
+static TX_THREAD network_thread;
+#endif
 static ULONG modbus_thread_stack[MODBUS_THREAD_STACK_BYTES / sizeof(ULONG)];
 static ULONG led_thread_stack[LED_THREAD_STACK_BYTES / sizeof(ULONG)];
+#if MODBUS_W800_ENABLE
+static ULONG network_thread_stack[NETWORK_THREAD_STACK_BYTES / sizeof(ULONG)];
+#endif
 
 static void system_clock_config(void);
 
@@ -59,6 +68,39 @@ static void led_thread_entry(ULONG input)
     }
 }
 
+#if MODBUS_W800_ENABLE
+/** @brief Own all blocking W800 AT/socket work outside the RTU service task. */
+static void network_thread_entry(ULONG input)
+{
+    bsp_status_t status;
+
+    (void)input;
+    while(1)
+    {
+        do
+        {
+            status = modbus_network_app_init();
+            if((status != BSP_STATUS_OK) &&
+               (status != BSP_STATUS_ALREADY_INITIALIZED))
+            {
+                (void)tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND * 5U);
+            }
+        } while((status != BSP_STATUS_OK) &&
+                (status != BSP_STATUS_ALREADY_INITIALIZED));
+
+        do
+        {
+            status = modbus_network_app_step(10U);
+            (void)tx_thread_sleep(status == BSP_STATUS_OK ? 10U : 100U);
+        } while((status == BSP_STATUS_OK) ||
+                (status == BSP_STATUS_NOT_READY));
+
+        (void)modbus_network_app_deinit();
+        (void)tx_thread_sleep(TX_TIMER_TICKS_PER_SECOND * 5U);
+    }
+}
+#endif
+
 /**
  * @brief Create all application tasks from caller-owned static storage.
  * @param first_unused_memory ThreadX-provided unused RAM marker; intentionally unused.
@@ -85,6 +127,17 @@ void tx_application_define(void *first_unused_memory)
     {
         bsp_fatal_stop(BSP_FATAL_STAGE_RUNTIME, BSP_STATUS_IO_ERROR);
     }
+
+#if MODBUS_W800_ENABLE
+    status = tx_thread_create(&network_thread, "W800 Modbus TCP",
+                              network_thread_entry, 0U,
+                              network_thread_stack, sizeof(network_thread_stack),
+                              15U, 15U, TX_NO_TIME_SLICE, TX_AUTO_START);
+    if(status != TX_SUCCESS)
+    {
+        bsp_fatal_stop(BSP_FATAL_STAGE_RUNTIME, BSP_STATUS_IO_ERROR);
+    }
+#endif
 }
 
 /** @brief Initialize the board and transfer control to the ThreadX kernel. */

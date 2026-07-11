@@ -33,6 +33,13 @@ typedef enum
     BSP_UART_RX_MODE_DMA
 } bsp_uart_rx_mode_t;
 
+/** @brief Bounded transmit backend selected for one UART instance. */
+typedef enum
+{
+    BSP_UART_TX_MODE_POLLING = 0,
+    BSP_UART_TX_MODE_DMA
+} bsp_uart_tx_mode_t;
+
 typedef struct
 {
     uint32_t baud_rate;
@@ -41,6 +48,7 @@ typedef struct
     bsp_uart_parity_t parity;
     uint8_t stop_bits;
     bsp_uart_rx_mode_t rx_mode;
+    bsp_uart_tx_mode_t tx_mode;
 } bsp_uart_config_t;
 
 typedef struct
@@ -55,6 +63,9 @@ typedef struct
     uint32_t rx_half_events;
     uint32_t rx_complete_events;
     uint32_t dma_errors;
+    uint32_t tx_complete_events;
+    uint32_t tx_dma_errors;
+    uint32_t tx_timeouts;
 } bsp_uart_diagnostics_t;
 
 /**
@@ -100,7 +111,7 @@ bsp_status_t bsp_uart_get_diagnostics(board_uart_role_t role,
 /**
  * @brief Return the normalized line configuration currently owned by a UART.
  * @param role Logical UART role.
- * @param config Receives baud, data bits, parity, stop bits, and RX chunk size.
+ * @param config Receives line format plus the active RX and TX backends.
  * @return BSP_STATUS_OK after initialization, otherwise an explicit error.
  */
 bsp_status_t bsp_uart_get_config(board_uart_role_t role,

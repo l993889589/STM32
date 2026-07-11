@@ -123,7 +123,8 @@ bsp_status_t transport_w800_tcp_init(transport_w800_tcp_t *transport,
         .data_bits = 8U,
         .parity = BSP_UART_PARITY_NONE,
         .stop_bits = 1U,
-        .rx_mode = BSP_UART_RX_MODE_IT
+        .rx_mode = BSP_UART_RX_MODE_IT,
+        .tx_mode = BSP_UART_TX_MODE_POLLING
     };
     status = bsp_uart_init(BOARD_UART_WIFI, &uart_config);
     if((status != BSP_STATUS_OK) && (status != BSP_STATUS_ALREADY_INITIALIZED))

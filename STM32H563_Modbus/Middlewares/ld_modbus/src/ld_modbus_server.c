@@ -349,7 +349,6 @@ static ld_modbus_status_t ld_modbus_server_write_read_registers(
     return LD_MODBUS_STATUS_OK;
 }
 
-/** @brief Dispatch one validated request PDU to the static server map. */
 /** @brief Process one request PDU against a caller-owned server map. */
 ld_modbus_status_t ld_modbus_server_process_pdu(const ld_modbus_server_map_t *map,
                                                 const uint8_t *request_pdu,
@@ -420,7 +419,6 @@ ld_modbus_status_t ld_modbus_server_process_pdu(const ld_modbus_server_map_t *ma
     }
 }
 
-/** @brief Process one RTU ADU and classify its required transport action. */
 /** @brief Process one complete RTU ADU with unit filtering and broadcast rules. */
 ld_modbus_status_t ld_modbus_server_process_rtu_adu(
     const ld_modbus_server_map_t *map,
@@ -479,7 +477,6 @@ ld_modbus_status_t ld_modbus_server_process_rtu_adu(
     return status;
 }
 
-/** @brief Process one TCP ADU and preserve its MBAP routing identifiers. */
 /** @brief Process one complete TCP ADU while preserving its MBAP correlation fields. */
 ld_modbus_status_t ld_modbus_server_process_tcp_adu(
     const ld_modbus_server_map_t *map,

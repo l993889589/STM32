@@ -20,4 +20,8 @@
 #define MODBUS_UART_RX_DMA                (0U)
 #endif
 
+#ifndef MODBUS_UART_TX_DMA
+#define MODBUS_UART_TX_DMA                MODBUS_UART_RX_DMA
+#endif
+
 #endif

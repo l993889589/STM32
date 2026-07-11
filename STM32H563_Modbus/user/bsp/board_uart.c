@@ -180,3 +180,9 @@ void GPDMA1_Channel1_IRQHandler(void)
 {
     bsp_uart_stm32h5_dma_irq(&board_uart_contexts[BOARD_UART_RS485_1]);
 }
+
+/** @brief Dispatch GPDMA1 channel 2 to the RS-485-1 transmit owner. */
+void GPDMA1_Channel2_IRQHandler(void)
+{
+    bsp_uart_stm32h5_tx_dma_irq(&board_uart_contexts[BOARD_UART_RS485_1]);
+}

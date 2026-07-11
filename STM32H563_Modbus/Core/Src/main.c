@@ -4,6 +4,7 @@
  */
 
 #include "main.h"
+#include <stdbool.h>
 #include "dcache.h"
 #include "gpio.h"
 #include "icache.h"
@@ -14,6 +15,7 @@
 #include "bsp_pwm.h"
 #include "bsp_time.h"
 #include "modbus_app.h"
+#include "modbus_network_app.h"
 #include "osal.h"
 
 static void system_clock_config(void);
@@ -25,8 +27,11 @@ int main(void)
 {
     bsp_deadline_t led_deadline;
     bsp_deadline_t service_deadline;
+    bsp_deadline_t network_deadline;
+    bsp_deadline_t network_retry_deadline;
     bsp_pwm_config_t pwm_config = {1000U, 0U};
     bsp_status_t status;
+    bool network_ready;
 
     HAL_Init();
     system_clock_config();
@@ -52,9 +57,14 @@ int main(void)
     {
         bsp_fatal_stop(BSP_FATAL_STAGE_RUNTIME, status);
     }
+    status = modbus_network_app_init();
+    network_ready = (status == BSP_STATUS_OK) ||
+                    (status == BSP_STATUS_ALREADY_INITIALIZED);
 
     bsp_deadline_start(&led_deadline, 500U);
     bsp_deadline_start(&service_deadline, 1U);
+    bsp_deadline_start(&network_deadline, 10U);
+    bsp_deadline_start(&network_retry_deadline, 5000U);
 
     while(1)
     {
@@ -72,6 +82,25 @@ int main(void)
                 bsp_fatal_stop(BSP_FATAL_STAGE_RUNTIME, status);
             }
             bsp_deadline_start(&service_deadline, 1U);
+        }
+
+        if(network_ready && bsp_deadline_has_expired(&network_deadline))
+        {
+            status = modbus_network_app_step(10U);
+            if((status != BSP_STATUS_OK) && (status != BSP_STATUS_NOT_READY))
+            {
+                (void)modbus_network_app_deinit();
+                network_ready = false;
+                bsp_deadline_start(&network_retry_deadline, 5000U);
+            }
+            bsp_deadline_start(&network_deadline, 10U);
+        }
+        else if(!network_ready && bsp_deadline_has_expired(&network_retry_deadline))
+        {
+            status = modbus_network_app_init();
+            network_ready = (status == BSP_STATUS_OK) ||
+                            (status == BSP_STATUS_ALREADY_INITIALIZED);
+            bsp_deadline_start(&network_retry_deadline, 5000U);
         }
 
         osal_yield();

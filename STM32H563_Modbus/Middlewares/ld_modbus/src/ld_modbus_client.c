@@ -177,7 +177,6 @@ ld_modbus_status_t ld_modbus_client_build_write_multiple_registers(
     return LD_MODBUS_STATUS_OK;
 }
 
-/** @brief Build function 16 from one address and two masks. */
 /** @brief Build an FC16 mask-write-register request PDU. */
 ld_modbus_status_t ld_modbus_client_build_mask_write_register(
     uint16_t address,
@@ -199,7 +198,6 @@ ld_modbus_status_t ld_modbus_client_build_mask_write_register(
     return LD_MODBUS_STATUS_OK;
 }
 
-/** @brief Build function 17 with bounded read and write register counts. */
 /** @brief Build an FC17 combined write/read-registers request PDU. */
 ld_modbus_status_t ld_modbus_client_build_write_read_multiple_registers(
     uint16_t read_address,
@@ -325,7 +323,6 @@ ld_modbus_status_t ld_modbus_client_parse_write_response(uint8_t expected_functi
     return LD_MODBUS_STATUS_OK;
 }
 
-/** @brief Validate a function 16 response against its complete request echo. */
 /** @brief Validate the echoed response for FC16 mask write. */
 ld_modbus_status_t ld_modbus_client_parse_mask_write_response(
     uint16_t expected_address,

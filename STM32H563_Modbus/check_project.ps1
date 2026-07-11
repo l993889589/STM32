@@ -11,6 +11,7 @@ function Require-NoMatch([string]$name, [string]$pattern, [string[]]$paths)
 }
 
 $user = Join-Path $PSScriptRoot 'user'
+$protocol = Join-Path $PSScriptRoot 'Middlewares\ld_modbus'
 $documented_files = @()
 $documented_files += Get-ChildItem (Join-Path $PSScriptRoot 'Core\Src') -File -Filter *.c |
     Where-Object Name -ne 'system_stm32h5xx.c'
@@ -55,6 +56,7 @@ Require-NoMatch 'ThreadX dependency in bare-metal project' 'tx_api\.h|tx_port\.h
 Require-NoMatch 'HAL type leaked through public BSP headers' '(GPIO|TIM|UART|SPI|I2C|FDCAN|PCD|RTC)_[A-Za-z0-9_]*TypeDef|stm32h5xx_hal\.h' $public_headers
 Require-NoMatch 'Runtime heap allocation' '\b(malloc|calloc|realloc|free)\s*\(' @((Join-Path $PSScriptRoot 'Core'), $user)
 Require-NoMatch 'Runtime heap allocation in RTOS glue' '\b(malloc|calloc|realloc|free)\s*\(' @((Join-Path $PSScriptRoot 'rtos'))
+Require-NoMatch 'Runtime heap allocation in ld_modbus' '\b(malloc|calloc|realloc|free)\s*\(' @($protocol)
 
 $project = Join-Path $PSScriptRoot 'MDK-ARM\STM32H563_Modbus.uvprojx'
 $raw = Get-Content -LiteralPath $project -Raw
@@ -97,12 +99,34 @@ if(($raw -notmatch '<StartAddress>0x8000000</StartAddress>') -or
 {
     $violations.Add('Keil standalone flash region must remain 0x08000000..0x081FFFFF')
 }
+if(($raw -notmatch 'MODBUS_UART_RX_DMA=1,MODBUS_UART_TX_DMA=1') -or
+   ([regex]::Matches($raw, '<FileName>modbus_network_app\.c</FileName>')).Count -ne 2)
+{
+    $violations.Add('Bare-metal IT/DMA targets must compile the network service and DMA target must enable RX plus TX DMA')
+}
 
 $threadx_project = Join-Path $PSScriptRoot 'MDK-ARM\STM32H563_Modbus_ThreadX.uvprojx'
 $threadx_raw = Get-Content -LiteralPath $threadx_project -Raw
 if(($threadx_raw -match '[A-Za-z]:\\') -or ($threadx_raw -match '\.\.\\\.\.\\'))
 {
     $violations.Add('ThreadX Keil project contains an external source path')
+}
+if(($threadx_raw -notmatch 'MODBUS_UART_RX_DMA=1,MODBUS_UART_TX_DMA=1') -or
+   ([regex]::Matches($threadx_raw, '<FileName>modbus_network_app\.c</FileName>')).Count -ne 2)
+{
+    $violations.Add('ThreadX IT/DMA targets must compile the network service and DMA target must enable RX plus TX DMA')
+}
+$uart_source = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'user\bsp\bsp_uart_stm32h5.c') -Raw
+$uart_irq_source = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'user\bsp\board_uart.c') -Raw
+if(($uart_source -notmatch 'GPDMA1_REQUEST_USART2_TX') -or
+   ($uart_irq_source -notmatch 'GPDMA1_Channel2_IRQHandler'))
+{
+    $violations.Add('USART2 DMA target must own a TX DMA request and IRQ dispatcher')
+}
+$root_ignore = Get-Content -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) '.gitignore') -Raw
+if($root_ignore -notmatch 'STM32H563_Modbus/user/app/modbus_network_config_local\.h')
+{
+    $violations.Add('Local W800 credentials file must stay ignored by Git')
 }
 if(($threadx_raw -notmatch 'TX_SINGLE_MODE_NON_SECURE=1') -or
    ($threadx_raw -notmatch 'BSP_RUNTIME_THREADX=1') -or

@@ -93,6 +93,46 @@ static bsp_status_t bsp_uart_receive_dma_init(bsp_uart_stm32h5_context_t *contex
 }
 
 /**
+ * @brief Configure the statically owned USART2 transmit DMA channel.
+ * @note Channel 2 is reserved by the board resource map for RS485-1 TX.
+ */
+static bsp_status_t bsp_uart_transmit_dma_init(bsp_uart_stm32h5_context_t *context)
+{
+    if(context->handle.Instance != USART2)
+    {
+        return BSP_STATUS_NOT_SUPPORTED;
+    }
+
+    __HAL_RCC_GPDMA1_CLK_ENABLE();
+    context->transmit_dma.Instance = GPDMA1_Channel2;
+    context->transmit_dma.Init.Request = GPDMA1_REQUEST_USART2_TX;
+    context->transmit_dma.Init.BlkHWRequest = DMA_BREQ_SINGLE_BURST;
+    context->transmit_dma.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    context->transmit_dma.Init.SrcInc = DMA_SINC_INCREMENTED;
+    context->transmit_dma.Init.DestInc = DMA_DINC_FIXED;
+    context->transmit_dma.Init.SrcDataWidth = DMA_SRC_DATAWIDTH_BYTE;
+    context->transmit_dma.Init.DestDataWidth = DMA_DEST_DATAWIDTH_BYTE;
+    context->transmit_dma.Init.Priority = DMA_LOW_PRIORITY_LOW_WEIGHT;
+    context->transmit_dma.Init.SrcBurstLength = 1U;
+    context->transmit_dma.Init.DestBurstLength = 1U;
+    context->transmit_dma.Init.TransferAllocatedPort =
+        DMA_SRC_ALLOCATED_PORT0 | DMA_DEST_ALLOCATED_PORT0;
+    context->transmit_dma.Init.TransferEventMode = DMA_TCEM_BLOCK_TRANSFER;
+    context->transmit_dma.Init.Mode = DMA_NORMAL;
+
+    if((HAL_DMA_Init(&context->transmit_dma) != HAL_OK) ||
+       (HAL_DMA_ConfigChannelAttributes(&context->transmit_dma,
+                                        DMA_CHANNEL_NPRIV) != HAL_OK))
+    {
+        return BSP_STATUS_IO_ERROR;
+    }
+    __HAL_LINKDMA(&context->handle, hdmatx, context->transmit_dma);
+    HAL_NVIC_SetPriority(GPDMA1_Channel2_IRQn, 10U, 0U);
+    HAL_NVIC_EnableIRQ(GPDMA1_Channel2_IRQn);
+    return BSP_STATUS_OK;
+}
+
+/**
  * @brief Restart bounded ReceiveToIdle reception for one UART context.
  */
 static bsp_status_t bsp_uart_restart_receive(bsp_uart_stm32h5_context_t *context)
@@ -179,7 +219,8 @@ bsp_status_t bsp_uart_stm32h5_init(bsp_uart_stm32h5_context_t *context,
     if((normalized.data_bits != 8U) ||
        ((normalized.stop_bits != 1U) && (normalized.stop_bits != 2U)) ||
        (normalized.parity > BSP_UART_PARITY_ODD) ||
-       (normalized.rx_mode > BSP_UART_RX_MODE_DMA))
+       (normalized.rx_mode > BSP_UART_RX_MODE_DMA) ||
+       (normalized.tx_mode > BSP_UART_TX_MODE_DMA))
     {
         return BSP_STATUS_NOT_SUPPORTED;
     }
@@ -218,6 +259,14 @@ bsp_status_t bsp_uart_stm32h5_init(bsp_uart_stm32h5_context_t *context,
     if(normalized.rx_mode == BSP_UART_RX_MODE_DMA)
     {
         status = bsp_uart_receive_dma_init(context);
+        if(status != BSP_STATUS_OK)
+        {
+            return status;
+        }
+    }
+    if(normalized.tx_mode == BSP_UART_TX_MODE_DMA)
+    {
+        status = bsp_uart_transmit_dma_init(context);
         if(status != BSP_STATUS_OK)
         {
             return status;
@@ -301,10 +350,52 @@ bsp_status_t bsp_uart_stm32h5_write(bsp_uart_stm32h5_context_t *context,
     {
         return BSP_STATUS_NOT_READY;
     }
-    if(HAL_UART_Transmit(&context->handle, (uint8_t *)data,
-                         (uint16_t)length, timeout_ms) != HAL_OK)
+    if(context->config.tx_mode == BSP_UART_TX_MODE_POLLING)
     {
-        return BSP_STATUS_TIMEOUT;
+        if(HAL_UART_Transmit(&context->handle, (uint8_t *)data,
+                             (uint16_t)length, timeout_ms) != HAL_OK)
+        {
+            context->diagnostics.tx_timeouts++;
+            return BSP_STATUS_TIMEOUT;
+        }
+    }
+    else
+    {
+        const uintptr_t start = (uintptr_t)data;
+        const uintptr_t aligned_start = start & ~(uintptr_t)31U;
+        const uint32_t clean_length =
+            (uint32_t)(((start - aligned_start) + length + 31U) &
+                       ~(uintptr_t)31U);
+        const uint32_t started_at = HAL_GetTick();
+
+        if(HAL_DCACHE_CleanByAddr(&hdcache1,
+                                  (const uint32_t *)aligned_start,
+                                  clean_length) != HAL_OK)
+        {
+            return BSP_STATUS_IO_ERROR;
+        }
+        context->transmit_complete = false;
+        context->transmit_error = false;
+        if(HAL_UART_Transmit_DMA(&context->handle, (uint8_t *)data,
+                                 (uint16_t)length) != HAL_OK)
+        {
+            context->diagnostics.tx_dma_errors++;
+            return BSP_STATUS_IO_ERROR;
+        }
+        while(!context->transmit_complete && !context->transmit_error)
+        {
+            if((uint32_t)(HAL_GetTick() - started_at) >= timeout_ms)
+            {
+                context->diagnostics.tx_timeouts++;
+                (void)HAL_UART_AbortTransmit(&context->handle);
+                return BSP_STATUS_TIMEOUT;
+            }
+        }
+        if(context->transmit_error)
+        {
+            context->diagnostics.tx_dma_errors++;
+            return BSP_STATUS_IO_ERROR;
+        }
     }
     context->diagnostics.tx_bytes += length;
     return BSP_STATUS_OK;
@@ -328,6 +419,28 @@ void bsp_uart_stm32h5_dma_irq(bsp_uart_stm32h5_context_t *context)
        (context->config.rx_mode == BSP_UART_RX_MODE_DMA))
     {
         HAL_DMA_IRQHandler(&context->receive_dma);
+    }
+}
+
+/** @brief Dispatch the statically owned transmit DMA interrupt. */
+void bsp_uart_stm32h5_tx_dma_irq(bsp_uart_stm32h5_context_t *context)
+{
+    if((context != NULL) && context->is_initialized &&
+       (context->config.tx_mode == BSP_UART_TX_MODE_DMA))
+    {
+        HAL_DMA_IRQHandler(&context->transmit_dma);
+    }
+}
+
+/** @brief Complete one bounded DMA transmission from ISR context. */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *handle)
+{
+    bsp_uart_stm32h5_context_t *context = bsp_uart_find(handle);
+
+    if(context != NULL)
+    {
+        context->diagnostics.tx_complete_events++;
+        context->transmit_complete = true;
     }
 }
 
@@ -405,6 +518,11 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *handle)
     if(context != NULL)
     {
         context->diagnostics.errors++;
+        if(context->config.tx_mode == BSP_UART_TX_MODE_DMA &&
+           !context->transmit_complete)
+        {
+            context->transmit_error = true;
+        }
         if(context->config.rx_mode == BSP_UART_RX_MODE_DMA)
         {
             context->diagnostics.dma_errors++;

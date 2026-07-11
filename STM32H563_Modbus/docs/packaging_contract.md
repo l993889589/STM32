@@ -1,17 +1,37 @@
-# 双工程打包约束
+# 工程与发布打包约束
 
-用户要求裸机和 ThreadX 工程能够分别直接复制，因此本工作区采用两份完整 BSP，而不是顶层 shared 源码。
+## 单一源码、四个目标
 
-约束如下：
+本工程不再维护裸机/RTOS 两份复制源码。四个 Keil 目标共享同一份 `Core`、
+`user/bsp`、`user/ldc`、`user/transport`、`user/app` 和 `Middlewares/ld_modbus`：
 
-1. `luoji` 和 `THREADX` 均包含自己的 CMSIS、HAL、BSP、LDC、OSAL、transport 和 Keil 工程。
-2. 任一 Keil 工程不得通过绝对路径或 `../..` 引用另一个工程或根目录源码。
-3. 为降低熟悉成本，每份工程的 BSP 实体文件统一平铺在 `user/bsp`；公共 API 使用 `bsp_*`，板级绑定使用 `board_*`，STM32H5 私有实现使用 `*_stm32h5` 后缀。
-4. ThreadX 类型只允许进入 ThreadX 工程的 OSAL、Core integration 和 middleware。
-5. 两份 BSP 的公共 API 和公共实现应保持一致；运行模式差异只位于 `target_config.h`、main、OSAL 和 ThreadX middleware。
-6. 修改公共 BSP、LDC、transport 或 device driver 后，必须同步另一份并执行两个工程的 clean build。
-7. 不允许为了同步方便重新引入顶层 shared 编译依赖。
+| 目标 | 运行环境 | USART2 RX/TX |
+| --- | --- | --- |
+| `STM32H563_Modbus` | 裸机 | IT / polling |
+| `STM32H563_Modbus_DMA` | 裸机 | DMA / DMA |
+| `STM32H563_Modbus_ThreadX_IT` | ThreadX | IT / polling |
+| `STM32H563_Modbus_ThreadX_DMA` | ThreadX | DMA / DMA |
 
-当前任务例外（2026-07-10）：用户明确要求板载外设长任务只写裸机，因此新增 I2C/LCD/Touch/FDCAN/RTC/USB/W800/Flash 完整接口只进入 `luoji`，`THREADX` 冻结在上一 clean-build 基线。接口仍按 RTOS 可复用边界设计，但“同步另一份并双目标构建”延后到用户单独授权 RTOS 移植时执行；这不是重新引入 shared 的许可。
+目标差异只能由 `target_config.h`、OSAL 实现、启动入口和 ThreadX middleware
+表达。协议层不得包含 HAL、ThreadX、UART 或 socket 类型。
 
-这种打包方式牺牲了单一源码来源，但换取每个工程文件夹可独立复制。同步责任通过双目标编译和文件比较承担。
+## 静态内存与边界
+
+- 协议表、ADU、LDC 队列、UART 环形缓冲、DMA 缓冲和线程栈全部由调用方静态持有。
+- ISR 只投递字节/事件，不做协议解析、AT 命令或 socket 操作。
+- RTU、W800 网络服务各自拥有寄存器表；ThreadX 下不共享可变协议表。
+- `check_project.ps1` 扫描工程和 `ld_modbus`，禁止运行时堆分配。
+- 凭据只能放在被 Git 忽略的 `modbus_network_config_local.h`。
+
+## 独立库发布
+
+`Middlewares/ld_modbus` 必须能单独作为仓库根目录使用，包含 Apache-2.0
+许可证、CMake、主机测试、CI、贡献和安全说明。STM32 BSP、LDC、W800、Keil
+工程和硬件测试不进入独立协议库；它们保留在 STM32 集成仓库作为参考实现与实机证据。
+
+发布前必须同时通过：
+
+1. 独立库 CMake + CTest。
+2. 四个 Keil 目标 0 error / 0 warning。
+3. `check_project.ps1` 与 T3.5 主机测试。
+4. 当前最终烧录目标的 COM3 RTU 从站和板端主机回归。

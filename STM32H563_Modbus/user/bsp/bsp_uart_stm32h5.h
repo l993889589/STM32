@@ -18,6 +18,7 @@ typedef struct
 {
     UART_HandleTypeDef handle;
     DMA_HandleTypeDef receive_dma;
+    DMA_HandleTypeDef transmit_dma;
     __ALIGNED(32) uint8_t receive_chunk[BSP_UART_STM32H5_RX_CHUNK_BYTES];
     uint8_t receive_ring[BSP_UART_STM32H5_RX_RING_BYTES];
     uint16_t receive_chunk_bytes;
@@ -26,6 +27,8 @@ typedef struct
     volatile uint32_t read_index;
     volatile uint32_t write_index;
     bsp_uart_diagnostics_t diagnostics;
+    volatile bool transmit_complete;
+    volatile bool transmit_error;
     bool is_initialized;
 } bsp_uart_stm32h5_context_t;
 
@@ -86,5 +89,12 @@ void bsp_uart_stm32h5_irq(bsp_uart_stm32h5_context_t *context);
  * @note ISR context only.
  */
 void bsp_uart_stm32h5_dma_irq(bsp_uart_stm32h5_context_t *context);
+
+/**
+ * Dispatch a transmit DMA interrupt to its owned HAL handle.
+ * @param context UART context owning the active GPDMA channel.
+ * @note ISR context only.
+ */
+void bsp_uart_stm32h5_tx_dma_irq(bsp_uart_stm32h5_context_t *context);
 
 #endif
