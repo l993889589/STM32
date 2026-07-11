@@ -13,8 +13,13 @@
  * This file deliberately has no HAL, UART, ThreadX, USBX or malloc dependency.
  * Platform locking and wakeup are provided by callbacks in upper layers.
  */
+#if defined(__MINGW32__) && !defined(__USE_MINGW_ANSI_STDIO)
+#define __USE_MINGW_ANSI_STDIO 1
+#endif
+
 #include "ldc_core.h"
 
+#include <inttypes.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -599,14 +604,18 @@ void ldc_dump_stats(ldc_t *ldc)
         return;
 
     printf("\r\n===== LDC Stats =====\r\n");
-    printf("RX Bytes      : %llu\r\n", s->rx_bytes);
-    printf("Packets       : %llu\r\n", s->packets);
-    printf("Overflow      : %llu\r\n", s->overflow);
-    printf("Drop          : %llu\r\n", s->drop);
-    printf("Overwrite     : %llu\r\n", s->overwrite_count);
-    printf("Ring Used     : %llu/%lu\r\n", s->cur_used, (unsigned long)ldc->ring.size);
-    printf("Ring Peak     : %llu/%lu\r\n", s->max_used, (unsigned long)ldc->ring.size);
-    printf("Packet Used   : %llu/%u\r\n", s->packet_used, ldc->packet.capacity);
-    printf("Packet Peak   : %llu/%u\r\n", s->packet_peak, ldc->packet.capacity);
+    printf("RX Bytes      : %" PRIu64 "\r\n", s->rx_bytes);
+    printf("Packets       : %" PRIu64 "\r\n", s->packets);
+    printf("Overflow      : %" PRIu64 "\r\n", s->overflow);
+    printf("Drop          : %" PRIu64 "\r\n", s->drop);
+    printf("Overwrite     : %" PRIu64 "\r\n", s->overwrite_count);
+    printf("Ring Used     : %" PRIu64 "/%lu\r\n",
+           s->cur_used, (unsigned long)ldc->ring.size);
+    printf("Ring Peak     : %" PRIu64 "/%lu\r\n",
+           s->max_used, (unsigned long)ldc->ring.size);
+    printf("Packet Used   : %" PRIu64 "/%u\r\n",
+           s->packet_used, (unsigned int)ldc->packet.capacity);
+    printf("Packet Peak   : %" PRIu64 "/%u\r\n",
+           s->packet_peak, (unsigned int)ldc->packet.capacity);
     printf("=====================\r\n");
 }
