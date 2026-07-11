@@ -19,6 +19,8 @@ tools/*.out.log
 **/MDK-ARM/*.log
 **/MDK-ARM/build_log.txt
 **/MDK-ARM/STM32H563_Threadx_usbx_cdc_acm/
+**/MDK-ARM/STM32H563_Modbus/
+**/MDK-ARM/stm32_h563_baremetal/
 **/*.uvguix.*
 **/*.uvoptx
 **/*.scvd
