@@ -19,7 +19,8 @@ $documented_files += Get-ChildItem (Join-Path $PSScriptRoot 'Core\Inc') -File -F
 $documented_files += Get-ChildItem (Join-Path $PSScriptRoot 'user\bsp'),
                                    (Join-Path $PSScriptRoot 'user\app'),
                                    (Join-Path $PSScriptRoot 'user\osal'),
-                                   (Join-Path $PSScriptRoot 'user\transport') -File |
+                                   (Join-Path $PSScriptRoot 'user\transport'),
+                                   (Join-Path $PSScriptRoot 'rtos\threadx') -File |
     Where-Object Extension -in '.c', '.h'
 
 $definition_pattern = '(?ms)^(?!\s*(?:if|for|while|switch)\b)(?:static\s+)?(?:const\s+)?[A-Za-z_][A-Za-z0-9_\s]*?(?:\*+\s*)?(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*?\)\s*\{'
@@ -53,6 +54,7 @@ Require-NoMatch 'MX dependency' '\bMX_[A-Za-z0-9_]+' @((Join-Path $PSScriptRoot 
 Require-NoMatch 'ThreadX dependency in bare-metal project' 'tx_api\.h|tx_port\.h' @($user)
 Require-NoMatch 'HAL type leaked through public BSP headers' '(GPIO|TIM|UART|SPI|I2C|FDCAN|PCD|RTC)_[A-Za-z0-9_]*TypeDef|stm32h5xx_hal\.h' $public_headers
 Require-NoMatch 'Runtime heap allocation' '\b(malloc|calloc|realloc|free)\s*\(' @((Join-Path $PSScriptRoot 'Core'), $user)
+Require-NoMatch 'Runtime heap allocation in RTOS glue' '\b(malloc|calloc|realloc|free)\s*\(' @((Join-Path $PSScriptRoot 'rtos'))
 
 $project = Join-Path $PSScriptRoot 'MDK-ARM\STM32H563_Modbus.uvprojx'
 $raw = Get-Content -LiteralPath $project -Raw
@@ -94,6 +96,27 @@ if(($raw -notmatch '<StartAddress>0x8000000</StartAddress>') -or
    ($raw -notmatch '<Size>0x200000</Size>'))
 {
     $violations.Add('Keil standalone flash region must remain 0x08000000..0x081FFFFF')
+}
+
+$threadx_project = Join-Path $PSScriptRoot 'MDK-ARM\STM32H563_Modbus_ThreadX.uvprojx'
+$threadx_raw = Get-Content -LiteralPath $threadx_project -Raw
+if(($threadx_raw -match '[A-Za-z]:\\') -or ($threadx_raw -match '\.\.\\\.\.\\'))
+{
+    $violations.Add('ThreadX Keil project contains an external source path')
+}
+if(($threadx_raw -notmatch 'TX_SINGLE_MODE_NON_SECURE=1') -or
+   ($threadx_raw -notmatch 'BSP_RUNTIME_THREADX=1') -or
+   ($threadx_raw -match '\.\.\\Core\\Src\\main\.c') -or
+   ($threadx_raw -match '\.\.\\Core\\Src\\stm32h5xx_it\.c') -or
+   ($threadx_raw -match 'osal_bare_metal\.c'))
+{
+    $violations.Add('ThreadX target runtime ownership is incomplete or conflicts with bare metal')
+}
+$threadx_low_level = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Middlewares\ST\threadx\ports\cortex_m33\ac6\src\tx_initialize_low_level.S') -Raw
+if(($threadx_low_level -notmatch 'SYSTEM_CLOCK\s*=\s*250000000') -or
+   ($threadx_low_level -notmatch 'SYSTEM_CLOCK / 1000'))
+{
+    $violations.Add('ThreadX SysTick must be derived from the 250 MHz clock at 1 kHz')
 }
 
 if($violations.Count -ne 0)

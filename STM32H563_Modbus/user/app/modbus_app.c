@@ -11,10 +11,13 @@
 #include "bsp_uart.h"
 #include "ld_modbus_ldc.h"
 #include "transport_uart_ldc.h"
+#include "target_config.h"
 
 #define MODBUS_APP_UNIT_ID             (1U)
 #define MODBUS_APP_BAUD_RATE           (115200U)
-#define MODBUS_APP_RTU_GAP_US          (1750U)
+#define MODBUS_APP_HIGH_BAUD_THRESHOLD (19200U)
+#define MODBUS_APP_HIGH_BAUD_T3_5_US   (1750U)
+#define MODBUS_APP_T3_5_X10            (35U)
 #define MODBUS_APP_PACKET_COUNT        (4U)
 #define MODBUS_APP_REGISTER_COUNT      (64U)
 #define MODBUS_APP_BIT_COUNT           (64U)
@@ -47,6 +50,31 @@ static const ld_modbus_server_map_t modbus_app_map =
     .input_registers_start = 0U,
     .input_registers_count = MODBUS_APP_REGISTER_COUNT
 };
+
+/**
+ * @brief Derive RTU T3.5 from the BSP-owned active UART line configuration.
+ * @return Timeout in microseconds, or zero if the UART configuration is unavailable.
+ */
+static uint32_t modbus_app_rtu_t3_5_us(void)
+{
+    bsp_uart_config_t config;
+    uint8_t parity_bits;
+
+    if(bsp_uart_get_config(BOARD_UART_RS485_1, &config) != BSP_STATUS_OK)
+    {
+        return 0U;
+    }
+    if(config.baud_rate > MODBUS_APP_HIGH_BAUD_THRESHOLD)
+    {
+        return MODBUS_APP_HIGH_BAUD_T3_5_US;
+    }
+    parity_bits = config.parity == BSP_UART_PARITY_NONE ? 0U : 1U;
+    return ldc_serial_silence_us(config.baud_rate,
+                                 config.data_bits,
+                                 parity_bits,
+                                 config.stop_bits,
+                                 MODBUS_APP_T3_5_X10);
+}
 
 /**
  * @brief Send one complete RTU response through the automatic-direction transceiver.
@@ -89,7 +117,16 @@ static bsp_status_t modbus_app_protocol_status(ld_modbus_status_t status)
  */
 bsp_status_t modbus_app_init(void)
 {
-    bsp_uart_config_t uart_config = {MODBUS_APP_BAUD_RATE, 64U};
+    bsp_uart_config_t uart_config =
+    {
+        .baud_rate = MODBUS_APP_BAUD_RATE,
+        .receive_chunk_bytes = 64U,
+        .data_bits = 8U,
+        .parity = BSP_UART_PARITY_NONE,
+        .stop_bits = 1U,
+        .rx_mode = MODBUS_UART_RX_DMA != 0U ?
+                   BSP_UART_RX_MODE_DMA : BSP_UART_RX_MODE_IT
+    };
     transport_uart_ldc_config_t ldc_config =
     {
         .ring_buffer = modbus_app_ldc_ring,
@@ -97,7 +134,7 @@ bsp_status_t modbus_app_init(void)
         .packet_pool = modbus_app_ldc_packets,
         .packet_count = MODBUS_APP_PACKET_COUNT,
         .max_frame = LD_MODBUS_RTU_MAX_ADU_LENGTH,
-        .timeout_us = MODBUS_APP_RTU_GAP_US,
+        .timeout_us = 0U,
         .delimiter = 0U,
         .delimiter_enabled = 0U
     };
@@ -118,6 +155,11 @@ bsp_status_t modbus_app_init(void)
     if(status != BSP_STATUS_OK)
     {
         return status;
+    }
+    ldc_config.timeout_us = modbus_app_rtu_t3_5_us();
+    if(ldc_config.timeout_us == 0U)
+    {
+        return BSP_STATUS_INVALID_ARGUMENT;
     }
     status = transport_uart_ldc_init(&modbus_app_transport,
                                      BOARD_UART_RS485_1,

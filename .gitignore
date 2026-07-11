@@ -20,6 +20,10 @@ tools/*.out.log
 **/MDK-ARM/build_log.txt
 **/MDK-ARM/STM32H563_Threadx_usbx_cdc_acm/
 **/MDK-ARM/STM32H563_Modbus/
+**/MDK-ARM/STM32H563_Modbus_DMA/
+**/MDK-ARM/STM32H563_Modbus_ThreadX_IT/
+**/MDK-ARM/STM32H563_Modbus_ThreadX_DMA/
+**/MDK-ARM/DebugConfig/STM32H563_Modbus*_STM32H563RIVx_1.0.0.dbgconf
 **/MDK-ARM/stm32_h563_baremetal/
 **/*.uvguix.*
 **/*.uvoptx

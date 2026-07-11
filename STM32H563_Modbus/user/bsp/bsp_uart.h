@@ -18,10 +18,29 @@ typedef enum
     BOARD_UART_COUNT
 } board_uart_role_t;
 
+/** @brief UART parity mode used by board-independent timing queries. */
+typedef enum
+{
+    BSP_UART_PARITY_NONE = 0,
+    BSP_UART_PARITY_EVEN,
+    BSP_UART_PARITY_ODD
+} bsp_uart_parity_t;
+
+/** @brief Non-blocking receive backend selected for one UART instance. */
+typedef enum
+{
+    BSP_UART_RX_MODE_IT = 0,
+    BSP_UART_RX_MODE_DMA
+} bsp_uart_rx_mode_t;
+
 typedef struct
 {
     uint32_t baud_rate;
     uint32_t receive_chunk_bytes;
+    uint8_t data_bits;
+    bsp_uart_parity_t parity;
+    uint8_t stop_bits;
+    bsp_uart_rx_mode_t rx_mode;
 } bsp_uart_config_t;
 
 typedef struct
@@ -32,10 +51,14 @@ typedef struct
     uint32_t errors;
     uint32_t restarts;
     uint32_t tx_bytes;
+    uint32_t rx_idle_events;
+    uint32_t rx_half_events;
+    uint32_t rx_complete_events;
+    uint32_t dma_errors;
 } bsp_uart_diagnostics_t;
 
 /**
- * Initialize a logical board UART and start non-blocking reception.
+ * Initialize a logical board UART and start IT or DMA non-blocking reception.
  * @param role Logical UART role.
  * @param config Baud rate and static receive-ring size.
  * @return BSP status.
@@ -73,5 +96,14 @@ bsp_status_t bsp_uart_write(board_uart_role_t role,
  */
 bsp_status_t bsp_uart_get_diagnostics(board_uart_role_t role,
                                       bsp_uart_diagnostics_t *diagnostics);
+
+/**
+ * @brief Return the normalized line configuration currently owned by a UART.
+ * @param role Logical UART role.
+ * @param config Receives baud, data bits, parity, stop bits, and RX chunk size.
+ * @return BSP_STATUS_OK after initialization, otherwise an explicit error.
+ */
+bsp_status_t bsp_uart_get_config(board_uart_role_t role,
+                                 bsp_uart_config_t *config);
 
 #endif

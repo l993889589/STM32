@@ -17,9 +17,12 @@
 typedef struct
 {
     UART_HandleTypeDef handle;
-    uint8_t receive_chunk[BSP_UART_STM32H5_RX_CHUNK_BYTES];
+    DMA_HandleTypeDef receive_dma;
+    __ALIGNED(32) uint8_t receive_chunk[BSP_UART_STM32H5_RX_CHUNK_BYTES];
     uint8_t receive_ring[BSP_UART_STM32H5_RX_RING_BYTES];
     uint16_t receive_chunk_bytes;
+    uint16_t receive_dma_offset;
+    bsp_uart_config_t config;
     volatile uint32_t read_index;
     volatile uint32_t write_index;
     bsp_uart_diagnostics_t diagnostics;
@@ -60,11 +63,28 @@ bsp_status_t bsp_uart_stm32h5_write(bsp_uart_stm32h5_context_t *context,
                                     const uint8_t *data,
                                     uint32_t length,
                                     uint32_t timeout_ms);
+
+/**
+ * @brief Copy the normalized runtime line configuration from one UART owner.
+ * @param context Initialized UART context.
+ * @param config Receives the configuration snapshot.
+ * @return BSP status.
+ */
+bsp_status_t bsp_uart_stm32h5_get_config(
+    const bsp_uart_stm32h5_context_t *context,
+    bsp_uart_config_t *config);
 /**
  * Dispatch a UART interrupt to its owned HAL handle.
  * @param context UART context bound to the active vector.
  * @note ISR context only.
  */
 void bsp_uart_stm32h5_irq(bsp_uart_stm32h5_context_t *context);
+
+/**
+ * Dispatch a receive DMA interrupt to its owned HAL handle.
+ * @param context UART context owning the active GPDMA channel.
+ * @note ISR context only.
+ */
+void bsp_uart_stm32h5_dma_irq(bsp_uart_stm32h5_context_t *context);
 
 #endif

@@ -143,6 +143,14 @@ bsp_status_t bsp_uart_get_diagnostics(board_uart_role_t role,
     return board_uart_contexts[role].is_initialized ? BSP_STATUS_OK : BSP_STATUS_NOT_READY;
 }
 
+/** @brief Implement bsp_uart_get_config() for logical board UART roles. */
+bsp_status_t bsp_uart_get_config(board_uart_role_t role,
+                                 bsp_uart_config_t *config)
+{
+    return role >= BOARD_UART_COUNT ? BSP_STATUS_INVALID_ARGUMENT :
+           bsp_uart_stm32h5_get_config(&board_uart_contexts[role], config);
+}
+
 /** @brief Dispatch the USART1 vector to the Wi-Fi UART owner. */
 void USART1_IRQHandler(void)
 {
@@ -165,4 +173,10 @@ void USART3_IRQHandler(void)
 void UART4_IRQHandler(void)
 {
     bsp_uart_stm32h5_irq(&board_uart_contexts[BOARD_UART_RS485_2]);
+}
+
+/** @brief Dispatch GPDMA1 channel 1 to the RS-485-1 receive owner. */
+void GPDMA1_Channel1_IRQHandler(void)
+{
+    bsp_uart_stm32h5_dma_irq(&board_uart_contexts[BOARD_UART_RS485_1]);
 }

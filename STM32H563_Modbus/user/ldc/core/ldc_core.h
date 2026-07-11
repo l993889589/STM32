@@ -107,6 +107,21 @@ void ldc_tick(ldc_t *ldc, uint32_t elapsed_ms);
 /* Microsecond timeout accounting. Use this for protocols such as Modbus RTU T3.5. */
 void ldc_tick_us(ldc_t *ldc, uint32_t elapsed_us);
 
+/**
+ * Calculate a generic UART silent interval from the active line format.
+ * @param baud_rate UART symbols per second.
+ * @param data_bits Data bits per character, normally 7, 8, or 9.
+ * @param parity_bits Zero for no parity or one when parity is enabled.
+ * @param stop_bits One or two stop bits.
+ * @param character_times_x10 Character intervals in tenths; 35 means 3.5 chars.
+ * @return Rounded-up interval in microseconds, or zero for invalid arguments.
+ */
+uint32_t ldc_serial_silence_us(uint32_t baud_rate,
+                               uint8_t data_bits,
+                               uint8_t parity_bits,
+                               uint8_t stop_bits,
+                               uint16_t character_times_x10);
+
 /* Reset silence accounting when the transport observes DMA progress. */
 void ldc_rx_activity(ldc_t *ldc);
 

@@ -428,6 +428,30 @@ void ldc_tick_us(ldc_t *ldc, uint32_t elapsed_us)
     ldc_notify_pending(ldc, &events);
 }
 
+/** @brief Calculate a rounded-up, protocol-independent UART silent interval. */
+uint32_t ldc_serial_silence_us(uint32_t baud_rate,
+                               uint8_t data_bits,
+                               uint8_t parity_bits,
+                               uint8_t stop_bits,
+                               uint16_t character_times_x10)
+{
+    uint64_t numerator;
+    uint64_t interval_us;
+    uint32_t bits_per_character;
+
+    if((baud_rate == 0U) || (data_bits == 0U) ||
+       (parity_bits > 1U) || (stop_bits == 0U) ||
+       (character_times_x10 == 0U))
+    {
+        return 0U;
+    }
+
+    bits_per_character = 1U + data_bits + parity_bits + stop_bits;
+    numerator = (uint64_t)bits_per_character * character_times_x10 * 100000ULL;
+    interval_us = (numerator + baud_rate - 1U) / baud_rate;
+    return interval_us > UINT32_MAX ? UINT32_MAX : (uint32_t)interval_us;
+}
+
 void ldc_rx_activity(ldc_t *ldc)
 {
     uint32_t state;

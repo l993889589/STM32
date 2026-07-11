@@ -2,6 +2,10 @@ param(
     [switch]$Build,
     [switch]$BuildOnly,
     [switch]$List,
+    [ValidateSet('IT', 'DMA')]
+    [string]$Variant = 'IT',
+    [ValidateSet('BareMetal', 'ThreadX')]
+    [string]$Runtime = 'BareMetal',
     [string]$Target = 'stm32h563rivx',
     [string]$Probe = '',
     [string]$Frequency = '1000000',
@@ -13,7 +17,17 @@ $ErrorActionPreference = 'Stop'
 $workspaceRoot = Split-Path -Parent $PSScriptRoot
 $localPython = Join-Path $workspaceRoot 'tools\python-3.12.4-embed-amd64\python.exe'
 $defaultPack = Join-Path $workspaceRoot 'tools\cmsis-packs\Keil.STM32H5xx_DFP.1.2.0.pack'
-$hex = Join-Path $PSScriptRoot 'MDK-ARM\STM32H563_Modbus\STM32H563_Modbus.hex'
+$imageName = if($Runtime -eq 'ThreadX')
+{
+    if($Variant -eq 'DMA') { 'STM32H563_Modbus_ThreadX_DMA' }
+    else { 'STM32H563_Modbus_ThreadX_IT' }
+}
+else
+{
+    if($Variant -eq 'DMA') { 'STM32H563_Modbus_DMA' }
+    else { 'STM32H563_Modbus' }
+}
+$hex = Join-Path $PSScriptRoot ("MDK-ARM\{0}\{0}.hex" -f $imageName)
 $script:PyOcdExitCode = 0
 
 function Invoke-PyOcd
@@ -66,11 +80,12 @@ if($List)
 
 if($Build)
 {
-    & (Join-Path $PSScriptRoot 'build.ps1')
+    $buildScript = if($Runtime -eq 'ThreadX') { 'build_threadx.ps1' } else { 'build.ps1' }
+    & (Join-Path $PSScriptRoot $buildScript) -Variant $Variant
 }
 else
 {
-    & (Join-Path $PSScriptRoot 'verify_image_address.ps1')
+    & (Join-Path $PSScriptRoot 'verify_image_address.ps1') -TargetName $imageName
 }
 if($BuildOnly)
 {

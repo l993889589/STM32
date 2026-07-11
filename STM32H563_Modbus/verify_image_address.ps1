@@ -1,6 +1,12 @@
+param(
+    [ValidateSet('STM32H563_Modbus', 'STM32H563_Modbus_DMA',
+                 'STM32H563_Modbus_ThreadX_IT', 'STM32H563_Modbus_ThreadX_DMA')]
+    [string]$TargetName = 'STM32H563_Modbus'
+)
+
 $ErrorActionPreference = 'Stop'
 
-$map = Join-Path $PSScriptRoot 'MDK-ARM\STM32H563_Modbus\STM32H563_Modbus.map'
+$map = Join-Path $PSScriptRoot ("MDK-ARM\{0}\{0}.map" -f $TargetName)
 if(!(Test-Path -LiteralPath $map))
 {
     throw 'Keil map file is missing; image address cannot be verified'
