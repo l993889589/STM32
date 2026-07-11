@@ -46,3 +46,18 @@ It was previously verified to match the H563 project copy in
 
 LDC remains an independent library. UART BSP transports bytes and events;
 services own LDC contexts, rings, packet pools, and framing policy.
+
+## ld_modbus upstream
+
+The reusable protocol core is published independently at:
+
+```text
+https://github.com/l993889589/ld_modbus
+```
+
+The STM32 tree vendors the same `include/` and `src/` protocol implementation,
+while board transports, W800, LDC ownership, Keil targets and hardware evidence
+remain in this integration repository. Independent packaging, extended host/LDC
+tests, contribution guidance and release CI are maintained in the upstream repo;
+the validated upstream checkpoint for this integration is commit
+`aa1bd99` (2026-07-11).
