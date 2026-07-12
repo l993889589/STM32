@@ -1,0 +1,40 @@
+﻿<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>STM32H563 榛戝專瀛愭姤鍛?/title>
+<style>body{font-family:Segoe UI,Microsoft YaHei,sans-serif;margin:24px;color:#222}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:6px;text-align:left}th{background:#263238;color:white}.summary{display:flex;gap:18px;margin:16px 0}.card{padding:12px 18px;border:1px solid #bbb;border-radius:8px}</style>
+</head><body><h1>STM32H563 榛戝專瀛愭姤鍛?/h1>
+<p>瀵煎嚭鏃堕棿锛?([DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss'))锛涚鍙ｏ細COM4</p>
+<div class="summary"><div class="card">璁板綍锛?(                               .Count)</div><div class="card">閿欒锛?error_count</div><div class="card">璀﹀憡锛?warning_count</div></div>
+<table><thead><tr><th>搴忓彿</th><th>RTC</th><th>绫诲瀷</th><th>绾у埆</th><th>鏉ユ簮</th><th>浠ｇ爜</th><th>杩愯鏃堕棿(ms)</th><th>杞借嵎(hex)</th></tr></thead><tbody>
+<tr style='background:#eef7ee'><td>50</td><td>2026-07-12T00:13:28</td><td>power</td><td>info</td><td>3</td><td>1</td><td>42667</td><td><code>050000000300000001000000000000000000000000000000</code></td></tr>
+<tr style='background:#eef7ee'><td>51</td><td>2026-07-12T00:13:31</td><td>power</td><td>info</td><td>3</td><td>2</td><td>42811</td><td><code>050000000300000001000000010000000300000000000000</code></td></tr>
+<tr style='background:#eef7ee'><td>52</td><td>2026-07-12T00:13:36</td><td>power</td><td>info</td><td>3</td><td>1</td><td>47024</td><td><code>060000000300000001000000000000000000000000000000</code></td></tr>
+<tr style='background:#eef7ee'><td>53</td><td>2026-07-12T00:13:39</td><td>power</td><td>info</td><td>3</td><td>2</td><td>47196</td><td><code>060000000300000001000000010000000300000000000000</code></td></tr>
+<tr style='background:#eef7ee'><td>54</td><td>2026-07-12T00:13:41</td><td>self_test</td><td>info</td><td>2</td><td>0</td><td>48870</td><td><code>706173733D3135206661696C3D30206F66666C696E653D30</code></td></tr>
+<tr style='background:#eef7ee'><td>55</td><td>2026-07-12T00:13:46</td><td>self_test</td><td>info</td><td>2</td><td>0</td><td>53097</td><td><code>706173733D3135206661696C3D30206F66666C696E653D30</code></td></tr>
+<tr style='background:#eef7ee'><td>56</td><td>2026-07-12T00:18:56</td><td>boot</td><td>info</td><td>1</td><td>1</td><td>0</td><td><code>72657365743D30783030303030303035</code></td></tr>
+<tr style='background:#ffdddd'><td>57</td><td>2026-07-12T00:19:09</td><td>self_test</td><td>error</td><td>2</td><td>2</td><td>18076</td><td><code>706173733D3133206661696C3D32206F66666C696E653D30</code></td></tr>
+<tr style='background:#fff3cd'><td>58</td><td>2026-07-12T00:19:18</td><td>fault</td><td>warning</td><td>4</td><td>1</td><td>25326</td><td><code>01000000020000000200000000000000</code></td></tr>
+<tr style='background:#ffdddd'><td>59</td><td>2026-07-12T00:19:19</td><td>fault</td><td>error</td><td>4</td><td>3</td><td>26828</td><td><code>01000000020000000200000005000000</code></td></tr>
+<tr style='background:#fff3cd'><td>60</td><td>2026-07-12T00:19:21</td><td>fault</td><td>warning</td><td>4</td><td>1</td><td>28589</td><td><code>02000000000000000000000000000000</code></td></tr>
+<tr style='background:#ffdddd'><td>61</td><td>2026-07-12T00:19:23</td><td>fault</td><td>error</td><td>4</td><td>3</td><td>30101</td><td><code>02000000000000000000000005000000</code></td></tr>
+<tr style='background:#eef7ee'><td>62</td><td>2026-07-12T00:24:02</td><td>boot</td><td>info</td><td>1</td><td>1</td><td>0</td><td><code>72657365743D30783030303030303035</code></td></tr>
+<tr style='background:#fff3cd'><td>63</td><td>2026-07-12T00:24:14</td><td>fault</td><td>warning</td><td>4</td><td>1</td><td>17969</td><td><code>01000000000000000000000000000000</code></td></tr>
+<tr style='background:#eef7ee'><td>64</td><td>2026-07-12T00:24:14</td><td>self_test</td><td>info</td><td>2</td><td>0</td><td>18092</td><td><code>706173733D3135206661696C3D30206F66666C696E653D30</code></td></tr>
+<tr style='background:#ffdddd'><td>65</td><td>2026-07-12T00:24:16</td><td>fault</td><td>error</td><td>4</td><td>3</td><td>19479</td><td><code>01000000000000000000000005000000</code></td></tr>
+<tr style='background:#eef7ee'><td>66</td><td>2026-07-12T00:27:23</td><td>boot</td><td>info</td><td>1</td><td>1</td><td>0</td><td><code>72657365743D30783030303030303035</code></td></tr>
+<tr style='background:#eef7ee'><td>67</td><td>2026-07-12T00:27:36</td><td>self_test</td><td>info</td><td>2</td><td>0</td><td>18056</td><td><code>706173733D3135206661696C3D30206F66666C696E653D30</code></td></tr>
+<tr style='background:#fff3cd'><td>68</td><td>2026-07-12T00:27:39</td><td>fault</td><td>warning</td><td>4</td><td>1</td><td>20589</td><td><code>01000000000000000000000000000000</code></td></tr>
+<tr style='background:#ffdddd'><td>69</td><td>2026-07-12T00:27:41</td><td>fault</td><td>error</td><td>4</td><td>3</td><td>22108</td><td><code>01000000000000000000000005000000</code></td></tr>
+<tr style='background:#fff3cd'><td>70</td><td>2026-07-12T00:27:43</td><td>fault</td><td>warning</td><td>4</td><td>1</td><td>23891</td><td><code>02000000000000000000000000000000</code></td></tr>
+<tr style='background:#ffdddd'><td>71</td><td>2026-07-12T00:27:45</td><td>fault</td><td>error</td><td>4</td><td>3</td><td>25393</td><td><code>02000000000000000000000005000000</code></td></tr>
+<tr style='background:#eef7ee'><td>72</td><td>2026-07-12T00:27:50</td><td>self_test</td><td>info</td><td>2</td><td>0</td><td>28933</td><td><code>706173733D3135206661696C3D30206F66666C696E653D30</code></td></tr>
+<tr style='background:#eef7ee'><td>73</td><td>2026-07-12T00:31:07</td><td>boot</td><td>info</td><td>1</td><td>1</td><td>0</td><td><code>72657365743D30783030303030303035</code></td></tr>
+<tr style='background:#eef7ee'><td>74</td><td>2026-07-12T00:31:20</td><td>self_test</td><td>info</td><td>2</td><td>0</td><td>18093</td><td><code>706173733D3135206661696C3D30206F66666C696E653D30</code></td></tr>
+<tr style='background:#fff3cd'><td>75</td><td>2026-07-12T00:31:22</td><td>fault</td><td>warning</td><td>4</td><td>1</td><td>19530</td><td><code>01000000000000000000000000000000</code></td></tr>
+<tr style='background:#eef7ee'><td>76</td><td>2026-07-12T00:31:22</td><td>fault</td><td>info</td><td>4</td><td>2</td><td>19559</td><td><code>01000000000000000100000000000000</code></td></tr>
+<tr style='background:#fff3cd'><td>77</td><td>2026-07-12T00:31:26</td><td>fault</td><td>warning</td><td>4</td><td>1</td><td>22765</td><td><code>02000000000000000000000000000000</code></td></tr>
+<tr style='background:#eef7ee'><td>78</td><td>2026-07-12T00:31:26</td><td>fault</td><td>info</td><td>4</td><td>2</td><td>22783</td><td><code>02000000000000000100000000000000</code></td></tr>
+<tr style='background:#eef7ee'><td>79</td><td>2026-07-12T00:31:32</td><td>self_test</td><td>info</td><td>2</td><td>0</td><td>27859</td><td><code>706173733D3135206661696C3D30206F66666C696E653D30</code></td></tr>
+<tr style='background:#eef7ee'><td>80</td><td>2026-07-12T00:38:13</td><td>boot</td><td>info</td><td>1</td><td>1</td><td>0</td><td><code>72657365743D30783030303030303035</code></td></tr>
+<tr style='background:#eef7ee'><td>81</td><td>2026-07-12T00:38:26</td><td>self_test</td><td>info</td><td>2</td><td>0</td><td>18066</td><td><code>706173733D3135206661696C3D30206F66666C696E653D30</code></td></tr>
+</tbody></table></body></html>
