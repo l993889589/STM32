@@ -46,6 +46,12 @@
 #define APP_W800_TX_TIMEOUT_MS       1000U
 #define APP_W800_CMD_TIMEOUT_MS      3000U
 #define APP_W800_JOIN_TIMEOUT_MS     45000U
+#define APP_W800_RESTORE_TIMEOUT_MS  15000U
+#define APP_W800_PROVISION_TIMEOUT_MS 300000U
+#define APP_W800_PROVISION_POLL_MS   1000U
+#define APP_W800_PROVISION_RETRY_MS  3000U
+#define APP_W800_SSID_MAX_LENGTH     32U
+#define APP_W800_PASSWORD_MAX_LENGTH 63U
 #define APP_W800_MQTT_KEEPALIVE_S    1800U
 #define APP_W800_MQTT_HTTP_PING_MS   0xFFFFFFFFUL
 #define APP_W800_MQTT_CLIENT_ID      "leduo-h563-w800"
@@ -90,7 +96,9 @@
 typedef enum
 {
     APP_W800_STATE_RESET = 0,
-    APP_W800_STATE_WIFI_JOIN,
+    APP_W800_STATE_WIFI_RESTORE,
+    APP_W800_STATE_PROVISION_START,
+    APP_W800_STATE_PROVISION_WAIT,
     APP_W800_STATE_MQTT_SOCKET,
     APP_W800_STATE_MQTT_CONNECT,
     APP_W800_STATE_ONLINE,
@@ -109,6 +117,17 @@ static uint16_t g_http_local_port = APP_W800_HTTP_LOCAL_PORT_START;
 static volatile uint8_t g_wifi_ready;
 static volatile uint8_t g_mqtt_online;
 static volatile uint8_t g_reconnect_requested;
+static volatile uint8_t g_provision_requested;
+static volatile uint8_t g_provisioning_active;
+static volatile uint32_t g_provision_attempts;
+static volatile uint32_t g_provision_timeouts;
+static volatile uint8_t g_usb_rescue_state;
+static volatile uint32_t g_usb_rescue_attempts;
+static TX_MUTEX g_usb_credentials_mutex;
+static uint8_t g_usb_credentials_mutex_ready;
+static uint8_t g_usb_credentials_pending;
+static char g_usb_ssid[APP_W800_SSID_MAX_LENGTH + 1U];
+static char g_usb_password[APP_W800_PASSWORD_MAX_LENGTH + 1U];
 static volatile uint8_t g_publish_status_requested;
 static volatile uint8_t g_publish_config_requested;
 static volatile uint8_t g_publish_data_requested;
@@ -304,6 +323,61 @@ static uint16_t app_w800_next_local_port(void);
 static void app_w800_clear_at_rx_state(void);
 static void app_w800_http_reset_stream_state(void);
 static void app_w800_scan_json_command_bytes(const uint8_t *data, uint16_t length);
+
+static void app_w800_secure_zero(void *data, size_t length)
+{
+    volatile uint8_t *cursor = (volatile uint8_t *)data;
+
+    while(length-- != 0U)
+        *cursor++ = 0U;
+}
+
+static bool app_w800_credential_is_valid(const char *text,
+                                         size_t min_length,
+                                         size_t max_length)
+{
+    size_t length;
+    size_t i;
+
+    if(text == NULL)
+        return false;
+    length = strlen(text);
+    if(length < min_length || length > max_length)
+        return false;
+
+    for(i = 0U; i < length; i++)
+    {
+        const unsigned char ch = (unsigned char)text[i];
+
+        if(ch < 0x20U || ch > 0x7EU || ch == (unsigned char)'"')
+            return false;
+    }
+    return true;
+}
+
+static bool app_w800_take_usb_credentials(char *ssid, char *password)
+{
+    bool available = false;
+
+    if(g_usb_credentials_mutex_ready == 0U || ssid == NULL || password == NULL)
+        return false;
+    if(tx_mutex_get(&g_usb_credentials_mutex, TX_WAIT_FOREVER) != TX_SUCCESS)
+        return false;
+
+    if(g_usb_credentials_pending != 0U)
+    {
+        memcpy(ssid, g_usb_ssid, sizeof(g_usb_ssid));
+        memcpy(password, g_usb_password, sizeof(g_usb_password));
+        app_w800_secure_zero(g_usb_ssid, sizeof(g_usb_ssid));
+        app_w800_secure_zero(g_usb_password, sizeof(g_usb_password));
+        g_usb_credentials_pending = 0U;
+        g_usb_rescue_state = APP_W800_USB_RESCUE_APPLYING;
+        available = true;
+    }
+
+    (void)tx_mutex_put(&g_usb_credentials_mutex);
+    return available;
+}
 
 static void app_w800_log_line(const char *line)
 {
@@ -3453,6 +3527,13 @@ UINT app_w800_init(void)
     ldc_easy_config_t ldc_config;
     UINT status;
 
+    status = tx_mutex_create(&g_usb_credentials_mutex,
+                             "w800 usb credentials",
+                             TX_INHERIT);
+    if(status != TX_SUCCESS)
+        return status;
+    g_usb_credentials_mutex_ready = 1U;
+
     status = tx_semaphore_create(&g_rx_sem, "w800 rx", 0U);
     if(status != TX_SUCCESS)
         return status;
@@ -3532,11 +3613,9 @@ void app_w800_task_entry(ULONG thread_input)
     bool spi_nor_logged = false;
     uint32_t last_command_fetch_ms = 0U;
     uint32_t last_heartbeat_ms = 0U;
-    const at_wifi_config_t wifi_config =
-    {
-        APP_W800_WIFI_SSID,
-        APP_W800_WIFI_PASSWORD
-    };
+    uint32_t state_entered_ms = 0U;
+    char usb_ssid[APP_W800_SSID_MAX_LENGTH + 1U];
+    char usb_password[APP_W800_PASSWORD_MAX_LENGTH + 1U];
 
     (void)thread_input;
     for(;;)
@@ -3560,11 +3639,49 @@ void app_w800_task_entry(ULONG thread_input)
             state_reported = true;
         }
 
+        if(app_w800_take_usb_credentials(usb_ssid, usb_password))
+        {
+            (void)at_module_close_socket(&g_module);
+            (void)at_module_w800_stop_provision(&g_module);
+            wifi_ready = false;
+            g_mqtt_online = 0U;
+            g_provisioning_active = 0U;
+            g_usb_rescue_attempts++;
+            if(at_module_w800_save_station_profile(&g_module,
+                                                    usb_ssid,
+                                                    usb_password))
+            {
+                g_usb_rescue_state = APP_W800_USB_RESCUE_SAVED;
+                state = APP_W800_STATE_RESET;
+                state_entered_ms = app_w800_now_ms(NULL);
+            }
+            else
+            {
+                g_usb_rescue_state = APP_W800_USB_RESCUE_FAILED;
+                state = APP_W800_STATE_PROVISION_START;
+                state_entered_ms = app_w800_now_ms(NULL);
+            }
+            app_w800_secure_zero(usb_ssid, sizeof(usb_ssid));
+            app_w800_secure_zero(usb_password, sizeof(usb_password));
+            continue;
+        }
+
         if(g_reconnect_requested != 0U)
         {
             g_reconnect_requested = 0U;
-            state = wifi_ready ? APP_W800_STATE_MQTT_RETRY : APP_W800_STATE_WIFI_JOIN;
+            state = wifi_ready ? APP_W800_STATE_MQTT_RETRY : APP_W800_STATE_RESET;
             g_mqtt_online = 0U;
+        }
+
+        if(g_provision_requested != 0U)
+        {
+            g_provision_requested = 0U;
+            (void)at_module_close_socket(&g_module);
+            wifi_ready = false;
+            g_mqtt_online = 0U;
+            g_provisioning_active = 0U;
+            state = APP_W800_STATE_PROVISION_START;
+            state_entered_ms = app_w800_now_ms(NULL);
         }
 
         if(APP_ENABLE_W800_LOG && !spi_nor_logged && usb_console_is_connected())
@@ -3579,21 +3696,73 @@ void app_w800_task_entry(ULONG thread_input)
             (void)at_module_close_socket(&g_module);
             (void)at_module_reset(&g_module);
             wifi_ready = false;
-            state = APP_W800_STATE_WIFI_JOIN;
+            g_provisioning_active = 0U;
+            state_entered_ms = app_w800_now_ms(NULL);
+            state = APP_W800_STATE_WIFI_RESTORE;
             break;
 
-        case APP_W800_STATE_WIFI_JOIN:
-            if(wifi_ready || at_module_connect_network(&g_module, &wifi_config))
+        case APP_W800_STATE_WIFI_RESTORE:
+            if(at_module_is_network_ready(&g_module))
             {
                 wifi_ready = true;
-                app_w800_log_line("w800 state: wifi ready\r\n");
+                if(g_usb_rescue_state == APP_W800_USB_RESCUE_SAVED)
+                    g_usb_rescue_state = APP_W800_USB_RESCUE_CONNECTED;
+                app_w800_log_line("w800 state: saved wifi ready\r\n");
                 state = APP_W800_STATE_MQTT_SOCKET;
+            }
+            else if((uint32_t)(app_w800_now_ms(NULL) - state_entered_ms) >=
+                    APP_W800_RESTORE_TIMEOUT_MS)
+            {
+                app_w800_log_line("w800 state: saved wifi unavailable, ble provision\r\n");
+                state = APP_W800_STATE_PROVISION_START;
             }
             else
             {
-                app_w800_log_line("w800 error: wifi join failed\r\n");
-                tx_thread_sleep(3000U);
+                tx_thread_sleep(APP_W800_PROVISION_POLL_MS);
+            }
+            break;
+
+        case APP_W800_STATE_PROVISION_START:
+            (void)at_module_close_socket(&g_module);
+            g_provision_attempts++;
+            if(at_module_w800_start_ble_provision(&g_module))
+            {
+                g_provisioning_active = 1U;
+                state_entered_ms = app_w800_now_ms(NULL);
+                app_w800_log_line("w800 state: ble provision active\r\n");
+                state = APP_W800_STATE_PROVISION_WAIT;
+            }
+            else
+            {
+                g_provisioning_active = 0U;
+                app_w800_log_line("w800 error: ble provision start failed\r\n");
+                tx_thread_sleep(APP_W800_PROVISION_RETRY_MS);
                 state = APP_W800_STATE_RESET;
+            }
+            break;
+
+        case APP_W800_STATE_PROVISION_WAIT:
+            if(at_module_is_network_ready(&g_module))
+            {
+                (void)at_module_w800_stop_provision(&g_module);
+                g_provisioning_active = 0U;
+                wifi_ready = true;
+                app_w800_log_line("w800 state: ble provision complete\r\n");
+                state = APP_W800_STATE_MQTT_SOCKET;
+            }
+            else if((uint32_t)(app_w800_now_ms(NULL) - state_entered_ms) >=
+                    APP_W800_PROVISION_TIMEOUT_MS)
+            {
+                (void)at_module_w800_stop_provision(&g_module);
+                g_provisioning_active = 0U;
+                g_provision_timeouts++;
+                app_w800_log_line("w800 warn: ble provision timeout\r\n");
+                tx_thread_sleep(APP_W800_PROVISION_RETRY_MS);
+                state = APP_W800_STATE_RESET;
+            }
+            else
+            {
+                tx_thread_sleep(APP_W800_PROVISION_POLL_MS);
             }
             break;
 
@@ -3771,9 +3940,9 @@ void app_w800_task_entry(ULONG thread_input)
             else
             {
                 wifi_ready = false;
-                app_w800_log_line("w800 warn: wifi lost, rejoin\r\n");
+                app_w800_log_line("w800 warn: wifi lost, restore saved profile\r\n");
                 tx_thread_sleep(1000U);
-                state = APP_W800_STATE_WIFI_JOIN;
+                state = APP_W800_STATE_RESET;
             }
             break;
 
@@ -3805,6 +3974,11 @@ void app_w800_get_status(app_w800_status_t *status)
         return;
     status->wifi_ready = g_wifi_ready;
     status->mqtt_online = g_mqtt_online;
+    status->provisioning_active = g_provisioning_active;
+    status->provision_attempts = g_provision_attempts;
+    status->provision_timeouts = g_provision_timeouts;
+    status->usb_rescue_state = g_usb_rescue_state;
+    status->usb_rescue_attempts = g_usb_rescue_attempts;
     status->socket_id = g_module.socket_id;
     status->state = g_state_diag;
     status->mqtt_stage = g_mqtt_stage;
@@ -3855,9 +4029,39 @@ void app_w800_request_reconnect(void)
     g_reconnect_requested = 1U;
 }
 
-const char *app_w800_wifi_ssid(void)
+/** @brief Request a bounded transition into W800 BLE provisioning. */
+void app_w800_request_ble_provisioning(void)
 {
-    return APP_W800_WIFI_SSID;
+    g_provision_requested = 1U;
+}
+
+app_w800_credentials_result_t app_w800_request_usb_credentials(const char *ssid,
+                                                               const char *password)
+{
+    if(!app_w800_credential_is_valid(ssid, 1U, APP_W800_SSID_MAX_LENGTH))
+        return APP_W800_CREDENTIALS_INVALID_SSID;
+    if(!app_w800_credential_is_valid(password, 8U, APP_W800_PASSWORD_MAX_LENGTH))
+        return APP_W800_CREDENTIALS_INVALID_PASSWORD;
+    if(g_usb_credentials_mutex_ready == 0U)
+        return APP_W800_CREDENTIALS_NOT_READY;
+    if(tx_mutex_get(&g_usb_credentials_mutex, TX_WAIT_FOREVER) != TX_SUCCESS)
+        return APP_W800_CREDENTIALS_NOT_READY;
+
+    if(g_usb_credentials_pending != 0U ||
+       g_usb_rescue_state == APP_W800_USB_RESCUE_APPLYING)
+    {
+        (void)tx_mutex_put(&g_usb_credentials_mutex);
+        return APP_W800_CREDENTIALS_BUSY;
+    }
+
+    (void)strncpy(g_usb_ssid, ssid, sizeof(g_usb_ssid) - 1U);
+    g_usb_ssid[sizeof(g_usb_ssid) - 1U] = '\0';
+    (void)strncpy(g_usb_password, password, sizeof(g_usb_password) - 1U);
+    g_usb_password[sizeof(g_usb_password) - 1U] = '\0';
+    g_usb_credentials_pending = 1U;
+    g_usb_rescue_state = APP_W800_USB_RESCUE_PENDING;
+    (void)tx_mutex_put(&g_usb_credentials_mutex);
+    return APP_W800_CREDENTIALS_ACCEPTED;
 }
 
 const char *app_w800_mqtt_host(void)

@@ -33,12 +33,6 @@ typedef enum
 
 typedef struct
 {
-    const char *ssid;
-    const char *password;
-} at_wifi_config_t;
-
-typedef struct
-{
     const char *apn;
     const char *user;
     const char *password;

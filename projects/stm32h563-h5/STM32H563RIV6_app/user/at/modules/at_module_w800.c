@@ -4,7 +4,7 @@
  * W800 模块驱动实现（基于通用 at_module 接口）
  *
  * 概述:
- *  - 目的: 为 W800 WiFi 模块实现探测、复位、配置连接、扫描、打开/发送/关闭 socket 等功能，
+ *  - 目的: 为 W800 WiFi 模块实现探测、复位、BLE 配网、USB 救援参数和 socket 功能，
  *    并将这些功能以 at_module_driver_t 的形式导出供上层使用。
  *  - 设计假设:
  *      * 使用 at_session / at_client 提供的同步命令发送与捕获机制。
@@ -12,7 +12,6 @@
  *      * 驱动在必要时调用底层 BSP（bsp_w800_hard_reset）进行硬件复位。
  *  - 超时与重试:
  *      * 常用命令超时定义为 W800_CMD_TIMEOUT_MS（3000 ms）
- *      * 加入 WiFi 的超时定义为 W800_JOIN_TIMEOUT_MS（45000 ms）
  *
  * 注意:
  *  - 本驱动对 AT 响应的解析较为简单（例如通过 strstr 查找 "+OK" 或 "+OK="），
@@ -27,11 +26,9 @@
 #include <string.h>
 
 #include "bsp.h"
-#include "at_command_plan.h"
 
-/* 命令超时与加入网络超时（毫秒） */
+/* 命令超时（毫秒） */
 #define W800_CMD_TIMEOUT_MS       3000U
-#define W800_JOIN_TIMEOUT_MS      45000U
 #define W800_SOCKET_SEND_MAX      256U
 #define W800_SOCKET_SEND_GAP_MS   20U
 
@@ -104,157 +101,178 @@ static bool w800_wifi_is_ready(at_module_t *module)
     return strstr(at_session_capture(module->session), "+OK=1") != NULL;
 }
 
-/* w800_scan_wifi
- *
- * 执行 WiFi 扫描（AT+WSCAN），等待扫描完成并在捕获缓冲中查找指定 ssid。
- *
- * 参数:
- *  - ssid: 要查找的 SSID 字符串
- *
- * 返回:
- *  - true: 在扫描结果中找到指定 SSID
- *  - false: 未找到或扫描失败/超时
- *
- * 备注:
- *  - 发送扫描命令时使用 at_client_send 直接发送并等待 "+OK" 出现（长超时）。
- *  - 扫描完成后会短暂 sleep 并 poll 输入以收集结果。
- */
-static bool w800_scan_wifi(at_module_t *module, const char *ssid)
+
+/** @brief Start the W800 firmware's built-in BLE Wi-Fi provisioner. */
+bool at_module_w800_start_ble_provision(at_module_t *module)
 {
-    bool found;
-
-    if(!ssid)
+    if((module == NULL) || (module->session == NULL) || !w800_probe(module))
         return false;
 
-    w800_log(module, "w800 state: scan wifi");
-    at_session_clear_capture(module->session);
+    w800_log(module, "w800 state: start ble provision");
+    (void)at_session_cmd_expect(module->session,
+                                "AT+ONESHOT=0",
+                                "+OK",
+                                W800_CMD_TIMEOUT_MS,
+                                1U);
+    /* BleWiFi requires the combined BT/BLE host profile used by the official
+     * WMBleWiFi application. An already-enabled stack may reject BTEN while
+     * still accepting ONESHOT=4, so ONESHOT is the authoritative result.
+     */
+    (void)at_session_cmd_expect(module->session,
+                                "AT+BTEN=255,6",
+                                "+OK",
+                                W800_CMD_TIMEOUT_MS,
+                                1U);
+    return at_session_cmd_expect(module->session,
+                                 "AT+ONESHOT=4",
+                                 "+OK",
+                                 W800_CMD_TIMEOUT_MS,
+                                 2U);
+}
 
-    if(at_client_send(&module->session->client,
-                      "AT+WSCAN=3FFF,2,120",
-                      at_session_now_ms(module->session),
-                      12000U) != 0)
+/**
+ * @brief Stop the W800 firmware's one-shot provisioning service.
+ */
+bool at_module_w800_stop_provision(at_module_t *module)
+{
+    if((module == NULL) || (module->session == NULL))
         return false;
 
-    if(!at_session_wait_contains(module->session, "+OK", 12000U))
+    w800_log(module, "w800 state: stop provision");
+    return at_session_cmd_expect(module->session,
+                                 "AT+ONESHOT=0",
+                                 "+OK",
+                                 W800_CMD_TIMEOUT_MS,
+                                 1U);
+}
+
+static bool w800_credential_is_valid(const char *text,
+                                     size_t min_length,
+                                     size_t max_length)
+{
+    size_t length;
+    size_t i;
+
+    if(text == NULL)
+        return false;
+    length = strlen(text);
+    if(length < min_length || length > max_length)
+        return false;
+
+    for(i = 0U; i < length; i++)
     {
-        w800_log(module, "w800 warn: wifi scan timeout");
-        at_client_clear_result(&module->session->client);
+        const unsigned char ch = (unsigned char)text[i];
+
+        if(ch < 0x20U || ch > 0x7EU || ch == (unsigned char)'"')
+            return false;
+    }
+    return true;
+}
+
+static void w800_secure_zero(void *data, size_t length)
+{
+    volatile uint8_t *cursor = (volatile uint8_t *)data;
+
+    while(length-- != 0U)
+        *cursor++ = 0U;
+}
+
+static bool w800_cmd_expect_secret(at_module_t *module,
+                                   const char *command,
+                                   const char *expect,
+                                   uint32_t timeout_ms)
+{
+    at_session_log_cb_t saved_log;
+    void *saved_log_arg;
+    bool accepted;
+
+    saved_log = module->session->log;
+    saved_log_arg = module->session->log_arg;
+    at_session_set_logger(module->session, NULL, NULL);
+    accepted = at_session_cmd_expect(module->session,
+                                     command,
+                                     expect,
+                                     timeout_ms,
+                                     1U);
+    w800_secure_zero(module->session->capture,
+                     sizeof(module->session->capture));
+    module->session->capture_len = 0U;
+    at_session_set_logger(module->session, saved_log, saved_log_arg);
+    return accepted;
+}
+
+/** @brief Persist a bounded WPA/WPA2 station profile without logging secrets. */
+bool at_module_w800_save_station_profile(at_module_t *module,
+                                         const char *ssid,
+                                         const char *password)
+{
+    char command[96];
+
+    if(module == NULL || module->session == NULL ||
+       !w800_credential_is_valid(ssid, 1U, 32U) ||
+       !w800_credential_is_valid(password, 8U, 63U) ||
+       !w800_probe(module))
+    {
         return false;
     }
 
-    if(module->session->sleep_ms)
-        module->session->sleep_ms(1000U, module->session->sleep_arg);
-    at_session_poll_input(module->session);
-
-    found = strstr(at_session_capture(module->session), ssid) != NULL;
-    w800_log(module, found ? "w800 state: configured ssid found" :
-                             "w800 warn: configured ssid not found in scan");
-
-    at_client_clear_result(&module->session->client);
-    return found;
-}
-
-/* w800_wait_wifi_ready
- *
- * 在给定超时时间内轮询检查 WiFi 是否就绪（调用 w800_wifi_is_ready）。
- *
- * 参数:
- *  - timeout_ms: 最大等待时间（毫秒）
- *
- * 返回:
- *  - true: 在超时前检测到就绪
- *  - false: 超时未就绪
- */
-static bool w800_wait_wifi_ready(at_module_t *module, uint32_t timeout_ms)
-{
-    uint32_t waited = 0U;
-
-    while(waited < timeout_ms)
+    w800_log(module, "w800 state: save usb rescue station profile");
+    (void)at_session_cmd_expect(module->session,
+                                "AT+ONESHOT=0",
+                                "+OK",
+                                W800_CMD_TIMEOUT_MS,
+                                1U);
+    (void)at_session_cmd_expect(module->session,
+                                "AT+WLEAV",
+                                "+OK",
+                                W800_CMD_TIMEOUT_MS,
+                                1U);
+    if(!at_session_cmd_expect(module->session,
+                              "AT+WPRT=0",
+                              "+OK",
+                              W800_CMD_TIMEOUT_MS,
+                              1U))
     {
-        if(w800_wifi_is_ready(module))
-            return true;
-
-        if(module->session->sleep_ms)
-            module->session->sleep_ms(1000U, module->session->sleep_arg);
-        waited += 1000U;
+        return false;
     }
 
-    return false;
+    (void)snprintf(command, sizeof(command), "AT+SSID=\"%s\"", ssid);
+    if(!at_session_cmd_expect(module->session,
+                              command,
+                              "+OK",
+                              W800_CMD_TIMEOUT_MS,
+                              1U))
+    {
+        return false;
+    }
+
+    (void)snprintf(command, sizeof(command), "AT+KEY=1,0,\"%s\"", password);
+    if(!w800_cmd_expect_secret(module,
+                               command,
+                               "+OK",
+                               W800_CMD_TIMEOUT_MS))
+    {
+        w800_secure_zero(command, sizeof(command));
+        return false;
+    }
+    w800_secure_zero(command, sizeof(command));
+
+    if(!at_session_cmd_expect(module->session,
+                              "AT+NIP=0",
+                              "+OK",
+                              W800_CMD_TIMEOUT_MS,
+                              1U))
+    {
+        return false;
+    }
+
+    return at_session_cmd_expect(module->session,
+                                 "AT+PMTF",
+                                 "+OK",
+                                 W800_CMD_TIMEOUT_MS,
+                                 1U);
 }
 
-/* w800_connect_network
- *
- * 配置并连接到指定的 WiFi 网络（STA 模式）。
- *
- * 参数:
- *  - config: 指向 at_wifi_config_t 的指针，包含 ssid 与 password 等
- *
- * 流程:
- *  1. probe 模块
- *  2. 设置工作模式、SSID、密码、NIP 等参数
- *  3. 保存配置并重启模块
- *  4. 扫描并尝试加入网络（AT+WJOIN），等待 DHCP 就绪
- *
- * 返回:
- *  - true: 成功连接并网络就绪
- *  - false: 任何一步失败
- *
- * 备注:
- *  - 使用多个 at_session_cmd_expect 调用，带重试次数。
- *  - 在保存配置后会短暂重启并再次 probe。
- */
-static bool w800_connect_network(at_module_t *module, const void *config)
-{
-    const at_wifi_config_t *wifi = (const at_wifi_config_t *)config;
-    char ssid_command[128];
-    char key_command[128];
-    at_command_step_t configure_steps[5];
-
-    if(!wifi || !wifi->ssid || !wifi->password)
-        return false;
-
-    if(!w800_probe(module))
-        return false;
-
-    w800_log(module, "w800 state: config sta");
-    (void)snprintf(ssid_command, sizeof(ssid_command), "AT+SSID=\"%s\"", wifi->ssid);
-    (void)snprintf(key_command, sizeof(key_command), "AT+KEY=1,0,\"%s\"", wifi->password);
-
-    configure_steps[0] = (at_command_step_t)
-        {"station mode", "AT+WPRT=0", "+OK", W800_CMD_TIMEOUT_MS, 2U, AT_COMMAND_REQUIRED};
-    configure_steps[1] = (at_command_step_t)
-        {"ssid", ssid_command, "+OK", W800_CMD_TIMEOUT_MS, 2U, AT_COMMAND_REQUIRED};
-    configure_steps[2] = (at_command_step_t)
-        {"key", key_command, "+OK", W800_CMD_TIMEOUT_MS, 2U, AT_COMMAND_REQUIRED};
-    configure_steps[3] = (at_command_step_t)
-        {"dhcp", "AT+NIP=0", "+OK", W800_CMD_TIMEOUT_MS, 2U, AT_COMMAND_REQUIRED};
-    configure_steps[4] = (at_command_step_t)
-        {"save profile", "AT+PMTF", "+OK", W800_CMD_TIMEOUT_MS, 2U, AT_COMMAND_OPTIONAL};
-
-    if(!at_command_plan_run(module->session,
-                            configure_steps,
-                            sizeof(configure_steps) / sizeof(configure_steps[0]),
-                            NULL))
-        return false;
-
-    w800_log(module, "w800 state: restart after profile save");
-    (void)at_session_cmd_expect(module->session, "AT+Z", "+OK", 1000U, 1U);
-
-    if(module->session->sleep_ms)
-        module->session->sleep_ms(1500U, module->session->sleep_arg);
-
-    if(!w800_probe(module))
-        return false;
-
-    (void)w800_scan_wifi(module, wifi->ssid);
-
-    w800_log(module, "w800 state: join wifi");
-    if(!at_session_cmd_expect(module->session, "AT+WJOIN", "+OK", W800_JOIN_TIMEOUT_MS, 1U))
-        return false;
-
-    w800_log(module, "w800 state: wait dhcp");
-    return w800_wait_wifi_ready(module, 15000U);
-}
 
 /* w800_parse_socket
  *
@@ -542,7 +560,7 @@ const at_module_driver_t g_at_module_w800 =
     AT_MODULE_KIND_WIFI,
     w800_probe,
     w800_reset,
-    w800_connect_network,
+    NULL,
     w800_wifi_is_ready,
     w800_open_socket,
     w800_send_socket,

@@ -14,6 +14,10 @@ typedef struct shell shell_t;
 
 typedef int (*shell_write_fn)(const uint8_t *data, uint16_t length, void *arg);
 typedef int (*shell_command_fn)(shell_t *shell, int argc, char **argv, void *arg);
+typedef void (*shell_line_input_fn)(shell_t *shell,
+                                    const char *line,
+                                    uint16_t length,
+                                    void *arg);
 
 typedef struct
 {
@@ -42,6 +46,11 @@ struct shell
     uint8_t previous_was_cr;
     uint8_t escape_state;
     uint8_t escape_parameter;
+    const char *line_input_prompt;
+    shell_line_input_fn line_input;
+    void *line_input_arg;
+    uint8_t line_input_active;
+    uint8_t line_input_echo;
 };
 
 int shell_init(shell_t *shell,
@@ -57,5 +66,15 @@ int shell_write(shell_t *shell, const char *text);
 int shell_printf(shell_t *shell, const char *format, ...);
 void shell_show_help(shell_t *shell, const char *command_name);
 bool shell_has_partial_line(const shell_t *shell);
+/**
+ * @brief Capture one line without command parsing or history storage.
+ * @param echo_input True for ordinary fields; false for secrets such as passwords.
+ * @note The callback receives line == NULL when the user cancels with Ctrl-C.
+ */
+bool shell_begin_line_input(shell_t *shell,
+                            const char *prompt,
+                            bool echo_input,
+                            shell_line_input_fn callback,
+                            void *arg);
 
 #endif /* LEDUO_SHELL_H */

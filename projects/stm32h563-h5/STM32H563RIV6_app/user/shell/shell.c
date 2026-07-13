@@ -45,8 +45,41 @@ int shell_printf(shell_t *shell, const char *format, ...)
 
 static void shell_prompt(shell_t *shell)
 {
+    if(shell->line_input_active != 0U)
+    {
+        if(shell->line_input_prompt != NULL)
+            (void)shell_write(shell, shell->line_input_prompt);
+        return;
+    }
     if(shell->prompt != NULL)
         (void)shell_write(shell, shell->prompt);
+}
+
+static void shell_clear_line(shell_t *shell)
+{
+    memset(shell->line, 0, sizeof(shell->line));
+    shell->length = 0U;
+    shell->cursor = 0U;
+    shell->history_position = SHELL_HISTORY_NONE;
+    shell->previous_was_cr = 0U;
+    shell->escape_state = 0U;
+    shell->escape_parameter = 0U;
+}
+
+static void shell_cancel_line_input(shell_t *shell, bool notify)
+{
+    shell_line_input_fn callback = shell->line_input;
+    void *arg = shell->line_input_arg;
+
+    shell->line_input_prompt = NULL;
+    shell->line_input = NULL;
+    shell->line_input_arg = NULL;
+    shell->line_input_active = 0U;
+    shell->line_input_echo = 1U;
+    shell->echo = 1U;
+    shell_clear_line(shell);
+    if(notify && callback != NULL)
+        callback(shell, NULL, 0U, arg);
 }
 
 static void shell_redraw(shell_t *shell)
@@ -335,13 +368,28 @@ void shell_reset(shell_t *shell)
 {
     if(shell == NULL)
         return;
-    memset(shell->line, 0, sizeof(shell->line));
-    shell->length = 0U;
-    shell->cursor = 0U;
-    shell->history_position = SHELL_HISTORY_NONE;
-    shell->previous_was_cr = 0U;
-    shell->escape_state = 0U;
-    shell->escape_parameter = 0U;
+    shell_cancel_line_input(shell, false);
+}
+
+bool shell_begin_line_input(shell_t *shell,
+                            const char *prompt,
+                            bool echo_input,
+                            shell_line_input_fn callback,
+                            void *arg)
+{
+    if(shell == NULL || prompt == NULL || callback == NULL ||
+       shell->line_input_active != 0U)
+    {
+        return false;
+    }
+
+    shell->line_input_prompt = prompt;
+    shell->line_input = callback;
+    shell->line_input_arg = arg;
+    shell->line_input_active = 1U;
+    shell->line_input_echo = echo_input ? 1U : 0U;
+    shell->echo = shell->line_input_echo;
+    return true;
 }
 
 void shell_input(shell_t *shell, const uint8_t *data, uint16_t length)
@@ -378,12 +426,33 @@ void shell_input(shell_t *shell, const uint8_t *data, uint16_t length)
         if(ch == '\r' || ch == '\n')
         {
             uint8_t ended_with_cr = (ch == '\r') ? 1U : 0U;
-            if(shell->echo != 0U)
+            if(shell->echo != 0U || shell->line_input_active != 0U)
                 (void)shell_write(shell, "\r\n");
             shell->line[shell->length] = '\0';
-            shell_history_commit(shell);
-            shell_execute(shell);
-            shell_reset(shell);
+            if(shell->line_input_active != 0U)
+            {
+                char captured[SHELL_LINE_SIZE];
+                shell_line_input_fn callback = shell->line_input;
+                void *callback_arg = shell->line_input_arg;
+                uint16_t captured_length = shell->length;
+
+                memcpy(captured, shell->line, captured_length + 1U);
+                shell->line_input_prompt = NULL;
+                shell->line_input = NULL;
+                shell->line_input_arg = NULL;
+                shell->line_input_active = 0U;
+                shell->line_input_echo = 1U;
+                shell->echo = 1U;
+                shell_clear_line(shell);
+                callback(shell, captured, captured_length, callback_arg);
+                memset(captured, 0, sizeof(captured));
+            }
+            else
+            {
+                shell_history_commit(shell);
+                shell_execute(shell);
+                shell_clear_line(shell);
+            }
             shell->previous_was_cr = ended_with_cr;
             shell_prompt(shell);
             continue;
@@ -391,7 +460,10 @@ void shell_input(shell_t *shell, const uint8_t *data, uint16_t length)
         if(ch == 0x03U)
         {
             (void)shell_write(shell, "^C\r\n");
-            shell_reset(shell);
+            if(shell->line_input_active != 0U)
+                shell_cancel_line_input(shell, true);
+            else
+                shell_clear_line(shell);
             shell_prompt(shell);
             continue;
         }

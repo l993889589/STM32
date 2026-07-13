@@ -64,6 +64,7 @@ static uint8_t g_transport_connected[APP_SHELL_TRANSPORT_COUNT];
 static app_shell_transport_t g_active_transport = APP_SHELL_TRANSPORT_NONE;
 static uint8_t g_app_shell_banner_pending;
 static uint8_t g_app_shell_initialized;
+static char g_wifi_rescue_ssid[33];
 
 static const char g_app_shell_banner[] =
     "\r\n\033[1;36m"
@@ -263,21 +264,168 @@ static int app_shell_cmd_modbus(shell_t *shell, int argc, char **argv, void *arg
     return 0;
 }
 
+static void app_shell_secure_zero(void *data, size_t length)
+{
+    volatile uint8_t *cursor = (volatile uint8_t *)data;
+
+    while(length-- != 0U)
+        *cursor++ = 0U;
+}
+
+static const char *app_shell_usb_rescue_state(uint8_t state)
+{
+    switch((app_w800_usb_rescue_state_t)state)
+    {
+    case APP_W800_USB_RESCUE_IDLE: return "idle";
+    case APP_W800_USB_RESCUE_PENDING: return "pending";
+    case APP_W800_USB_RESCUE_APPLYING: return "applying";
+    case APP_W800_USB_RESCUE_SAVED: return "saved";
+    case APP_W800_USB_RESCUE_CONNECTED: return "connected";
+    case APP_W800_USB_RESCUE_FAILED: return "failed";
+    default: return "unknown";
+    }
+}
+
+static bool app_shell_wifi_ssid_is_valid(const char *ssid, uint16_t length)
+{
+    uint16_t i;
+
+    if(ssid == NULL || length == 0U || length > 32U)
+        return false;
+    for(i = 0U; i < length; i++)
+    {
+        const unsigned char ch = (unsigned char)ssid[i];
+
+        if(ch < 0x20U || ch > 0x7EU || ch == (unsigned char)'"')
+            return false;
+    }
+    return true;
+}
+
+static void app_shell_wifi_password_input(shell_t *shell,
+                                          const char *password,
+                                          uint16_t length,
+                                          void *arg)
+{
+    app_w800_credentials_result_t result;
+
+    (void)arg;
+    if(password == NULL)
+    {
+        app_shell_secure_zero(g_wifi_rescue_ssid, sizeof(g_wifi_rescue_ssid));
+        (void)shell_write(shell, "USB rescue cancelled\r\n");
+        return;
+    }
+
+    if(length < 8U || length > 63U)
+    {
+        app_shell_secure_zero(g_wifi_rescue_ssid, sizeof(g_wifi_rescue_ssid));
+        (void)shell_write(shell, "password must be 8..63 printable ASCII bytes\r\n");
+        return;
+    }
+
+    result = app_w800_request_usb_credentials(g_wifi_rescue_ssid, password);
+    app_shell_secure_zero(g_wifi_rescue_ssid, sizeof(g_wifi_rescue_ssid));
+    switch(result)
+    {
+    case APP_W800_CREDENTIALS_ACCEPTED:
+        (void)shell_write(shell,
+                          "credentials queued; use 'wifi status' for the result\r\n");
+        break;
+    case APP_W800_CREDENTIALS_INVALID_SSID:
+        (void)shell_write(shell, "invalid SSID\r\n");
+        break;
+    case APP_W800_CREDENTIALS_INVALID_PASSWORD:
+        (void)shell_write(shell, "invalid password\r\n");
+        break;
+    case APP_W800_CREDENTIALS_BUSY:
+        (void)shell_write(shell, "USB rescue is already pending\r\n");
+        break;
+    default:
+        (void)shell_write(shell, "W800 service is not ready\r\n");
+        break;
+    }
+}
+
+static void app_shell_wifi_ssid_input(shell_t *shell,
+                                      const char *ssid,
+                                      uint16_t length,
+                                      void *arg)
+{
+    (void)arg;
+    if(ssid == NULL)
+    {
+        app_shell_secure_zero(g_wifi_rescue_ssid, sizeof(g_wifi_rescue_ssid));
+        (void)shell_write(shell, "USB rescue cancelled\r\n");
+        return;
+    }
+    if(!app_shell_wifi_ssid_is_valid(ssid, length))
+    {
+        (void)shell_write(shell,
+                          "SSID must be 1..32 printable ASCII bytes without a quote\r\n");
+        (void)shell_begin_line_input(shell,
+                                     "SSID: ",
+                                     true,
+                                     app_shell_wifi_ssid_input,
+                                     NULL);
+        return;
+    }
+
+    memcpy(g_wifi_rescue_ssid, ssid, length);
+    g_wifi_rescue_ssid[length] = '\0';
+    if(!shell_begin_line_input(shell,
+                               "Password (hidden): ",
+                               false,
+                               app_shell_wifi_password_input,
+                               NULL))
+    {
+        app_shell_secure_zero(g_wifi_rescue_ssid, sizeof(g_wifi_rescue_ssid));
+        (void)shell_write(shell, "unable to start password capture\r\n");
+    }
+}
+
 static int app_shell_cmd_wifi(shell_t *shell, int argc, char **argv, void *arg)
 {
     app_board_status_t status;
 
     (void)arg;
+    if(argc == 2 &&
+       (strcmp(argv[1], "ble") == 0 || strcmp(argv[1], "provision") == 0))
+    {
+        app_w800_request_ble_provisioning();
+        (void)shell_write(shell, "W800 BLE provisioning requested\r\n");
+        return 0;
+    }
+    if(argc == 2 && strcmp(argv[1], "rescue") == 0)
+    {
+        app_shell_secure_zero(g_wifi_rescue_ssid, sizeof(g_wifi_rescue_ssid));
+        if(!shell_begin_line_input(shell,
+                                   "SSID: ",
+                                   true,
+                                   app_shell_wifi_ssid_input,
+                                   NULL))
+        {
+            (void)shell_write(shell, "another input request is active\r\n");
+            return -1;
+        }
+        return 0;
+    }
     if(argc != 2 || strcmp(argv[1], "status") != 0)
     {
-        (void)shell_write(shell, "usage: wifi status\r\n");
+        (void)shell_write(shell, "usage: wifi status|ble|rescue\r\n");
         return -1;
     }
 
     app_board_get_status(&status);
-    (void)shell_printf(shell, "wifi %s, ssid=%s\r\n",
+    (void)shell_printf(shell,
+                       "wifi %s, provisioning=ble active=%u attempts=%lu timeouts=%lu "
+                       "usb_rescue=%s rescue_attempts=%lu\r\n",
                        status.wifi_ready ? "ready" : "offline",
-                       app_w800_wifi_ssid());
+                       status.wifi_provisioning_active,
+                       (unsigned long)status.wifi_provision_attempts,
+                       (unsigned long)status.wifi_provision_timeouts,
+                       app_shell_usb_rescue_state(status.wifi_usb_rescue_state),
+                       (unsigned long)status.wifi_usb_rescue_attempts);
     app_shell_print_ldc(shell, "w800", &status.w800_ldc);
     return 0;
 }
@@ -1427,7 +1575,7 @@ static const shell_command_t g_app_shell_commands[] =
     {"self_test", "self_test status|run", "run and print whole-board diagnostics", app_shell_cmd_self_test, NULL},
     {"power", "power status|stop|auto|lock", "control automatic Stop and wake locks", app_shell_cmd_power, NULL},
     {"modbus", "modbus status", "show Modbus RTU counters", app_shell_cmd_modbus, NULL},
-    {"wifi", "wifi status", "show WiFi state", app_shell_cmd_wifi, NULL},
+    {"wifi", "wifi status|ble|rescue", "inspect WiFi, start BLE provisioning, or USB rescue", app_shell_cmd_wifi, NULL},
     {"mqtt", "mqtt status|reconnect", "inspect or reconnect MQTT", app_shell_cmd_mqtt, NULL},
     {"ota", "ota status", "show OTA receive state", app_shell_cmd_ota, NULL},
     {"usb", "usb status", "show Vendor Bulk counters", app_shell_cmd_usb, NULL},
@@ -1454,6 +1602,7 @@ static void app_shell_service_once(void)
             break;
 
         app_shell_input(g_active_transport, g_app_shell_frame, (uint16_t)length);
+        app_shell_secure_zero(g_app_shell_frame, sizeof(g_app_shell_frame));
     }
 }
 
