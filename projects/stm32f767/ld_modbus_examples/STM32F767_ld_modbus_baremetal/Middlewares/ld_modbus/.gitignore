@@ -1,0 +1,9 @@
+/build/
+/out/
+/.vs/
+/.vscode/
+*.user
+*.o
+*.obj
+*.exe
+

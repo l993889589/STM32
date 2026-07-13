@@ -1,0 +1,25 @@
+# Keil build output and local IDE state
+MDK-ARM/STM32F767_ld_modbus_freertos/
+MDK-ARM/CAN/
+MDK-ARM/DebugConfig/
+MDK-ARM/CAN/
+MDK-ARM/*.uvguix.*
+MDK-ARM/*.uvoptx
+MDK-ARM/*.log
+MDK-ARM/JLink*.ini
+*.axf
+*.hex
+*.bin
+*.elf
+*.map
+*.o
+*.d
+*.crf
+*.lnp
+*.dep
+*.htm
+
+# Local caches and backups
+*.si4project/
+Backup/
+__pycache__/
