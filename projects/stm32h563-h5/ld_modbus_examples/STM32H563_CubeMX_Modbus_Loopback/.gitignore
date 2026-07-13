@@ -1,0 +1,12 @@
+MDK-ARM/*.uvguix.*
+MDK-ARM/*.uvoptx
+MDK-ARM/build.log
+MDK-ARM/STM32H563_ld_modbus_app/
+*.axf
+*.bin
+*.hex
+*.map
+*.o
+*.d
+*.crf
+*.lst
