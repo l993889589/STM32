@@ -1,0 +1,3 @@
+[submodule "ARTPI/ldc"]
+	path = ARTPI/ldc
+	url = https://github.com/l993889589/ld_modbus.git
