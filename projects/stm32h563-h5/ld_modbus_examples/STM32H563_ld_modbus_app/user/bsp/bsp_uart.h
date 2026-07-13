@@ -1,0 +1,100 @@
+/**
+ * @file bsp_uart.h
+ * @brief Logical board UART public interface.
+ */
+
+#ifndef BSP_UART_H
+#define BSP_UART_H
+
+#include <stdint.h>
+#include "bsp_status.h"
+
+typedef enum
+{
+    BOARD_UART_DEBUG = 0,
+    BOARD_UART_WIFI,
+    BOARD_UART_RS485_1,
+    BOARD_UART_RS485_2,
+    BOARD_UART_COUNT
+} board_uart_role_t;
+
+typedef struct
+{
+    uint32_t baud_rate;
+    uint32_t receive_chunk_bytes;
+} bsp_uart_config_t;
+
+typedef struct
+{
+    uint32_t rx_bytes;
+    uint32_t rx_events;
+    uint32_t rx_overflow;
+    uint32_t errors;
+    uint32_t restarts;
+    uint32_t tx_bytes;
+} bsp_uart_health_t;
+
+/**
+ * Initialize a logical board UART and start non-blocking reception.
+ * @param role Logical UART role.
+ * @param config Baud rate and static receive-ring size.
+ * @return BSP status.
+ */
+bsp_status_t bsp_uart_init(board_uart_role_t role, const bsp_uart_config_t *config);
+/**
+ * Copy currently available UART bytes without blocking.
+ * @param role Logical UART role.
+ * @param data Caller-owned destination buffer.
+ * @param capacity Destination capacity in bytes.
+ * @param length Receives the number of bytes copied.
+ * @return BSP status; zero available bytes is not an error.
+ */
+bsp_status_t bsp_uart_try_read(board_uart_role_t role,
+                               uint8_t *data,
+                               uint32_t capacity,
+                               uint32_t *length);
+/**
+ * Copy UART bytes with the microsecond timestamp recorded when each byte was
+ * accepted by the BSP ISR callback.
+ * @param role Logical UART role.
+ * @param data Caller-owned destination buffer.
+ * @param timestamp_us Destination timestamp array; one entry per byte.
+ * @param capacity Destination capacity in bytes.
+ * @param length Receives the number of bytes copied.
+ * @return BSP status; zero available bytes is not an error.
+ */
+bsp_status_t bsp_uart_try_read_timed(board_uart_role_t role,
+                                     uint8_t *data,
+                                     uint32_t *timestamp_us,
+                                     uint32_t capacity,
+                                     uint32_t *length);
+/**
+ * Write UART bytes with a bounded timeout.
+ * @param role Logical UART role.
+ * @param data Transmit bytes valid until the call returns.
+ * @param length Number of bytes to transmit.
+ * @param timeout_ms Maximum blocking time in milliseconds.
+ * @return BSP status.
+ */
+bsp_status_t bsp_uart_write(board_uart_role_t role,
+                            const uint8_t *data,
+                            uint32_t length,
+                            uint32_t timeout_ms);
+/**
+ * Read health counters for a logical UART.
+ * @param role Logical UART role.
+ * @param health Receives a snapshot of counters.
+ * @return BSP status.
+ */
+bsp_status_t bsp_uart_get_health(board_uart_role_t role,
+                                      bsp_uart_health_t *health);
+/**
+ * Return the configured UART baud rate for protocol timing calculations.
+ * @param role Logical UART role.
+ * @param baud_rate Receives the active baud rate.
+ * @return BSP status.
+ */
+bsp_status_t bsp_uart_get_baud_rate(board_uart_role_t role,
+                                    uint32_t *baud_rate);
+
+#endif
