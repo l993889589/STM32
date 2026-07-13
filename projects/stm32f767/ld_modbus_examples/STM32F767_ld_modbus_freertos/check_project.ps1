@@ -61,6 +61,16 @@ if($port -match 'ReceiveToIdle|Receive_DMA|HAL_TIM|DWT')
     throw 'Modbus port unexpectedly depends on DMA, IDLE, TIM, or DWT'
 }
 
+$slave = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'app\modbus_slave_example.c') -Raw -Encoding UTF8
+if($slave -notmatch 'ld_modbus_server_map_set_input_register\(&g_map,\s*0U,\s*0xF767U\)')
+{
+    throw 'Slave diagnostics must start at input register 0'
+}
+if($slave -match 'ld_modbus_server_map_write_holding_register')
+{
+    throw 'Slave diagnostics must not overwrite remotely writable holding registers'
+}
+
 $freeRtosConfig = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Core\Inc\FreeRTOSConfig.h') -Raw -Encoding UTF8
 if($freeRtosConfig -notmatch 'configSUPPORT_STATIC_ALLOCATION\s+1' -or
    $freeRtosConfig -notmatch 'configSUPPORT_DYNAMIC_ALLOCATION\s+0' -or

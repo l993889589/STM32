@@ -31,23 +31,23 @@ static uint16_t g_input_registers[MODBUS_SLAVE_INPUT_COUNT];
 static ld_modbus_rtu_framer_t g_framer;
 static ld_modbus_server_map_t g_map;
 
-/** @brief Reflect diagnostic counters into holding registers 0 through 7. */
-static void modbus_slave_update_registers(void)
+/** @brief Publish diagnostics through protocol-read-only input registers 0..7. */
+static void modbus_slave_update_diagnostics(void)
 {
-    (void)ld_modbus_server_map_write_holding_register(&g_map, 0U, 0xF767U);
-    (void)ld_modbus_server_map_write_holding_register(
+    (void)ld_modbus_server_map_set_input_register(&g_map, 0U, 0xF767U);
+    (void)ld_modbus_server_map_set_input_register(
         &g_map, 1U, (uint16_t)g_modbus_slave_report.rx_frames);
-    (void)ld_modbus_server_map_write_holding_register(
+    (void)ld_modbus_server_map_set_input_register(
         &g_map, 2U, (uint16_t)g_modbus_slave_report.tx_frames);
-    (void)ld_modbus_server_map_write_holding_register(
+    (void)ld_modbus_server_map_set_input_register(
         &g_map, 3U, (uint16_t)g_modbus_slave_report.crc_errors);
-    (void)ld_modbus_server_map_write_holding_register(
+    (void)ld_modbus_server_map_set_input_register(
         &g_map, 4U, (uint16_t)g_modbus_slave_report.protocol_errors);
-    (void)ld_modbus_server_map_write_holding_register(
+    (void)ld_modbus_server_map_set_input_register(
         &g_map, 5U, (uint16_t)g_modbus_slave_report.t15_violations);
-    (void)ld_modbus_server_map_write_holding_register(
+    (void)ld_modbus_server_map_set_input_register(
         &g_map, 6U, (uint16_t)g_modbus_slave_report.t15_us);
-    (void)ld_modbus_server_map_write_holding_register(
+    (void)ld_modbus_server_map_set_input_register(
         &g_map, 7U, (uint16_t)g_modbus_slave_report.t35_us);
 }
 
@@ -74,7 +74,7 @@ static void modbus_slave_process_frame(const uint8_t *request,
     size_t response_length = 0U;
 
     g_modbus_slave_report.rx_frames++;
-    modbus_slave_update_registers();
+    modbus_slave_update_diagnostics();
 
     status = ld_modbus_server_process_rtu_adu(&g_map,
                                                MODBUS_APP_UNIT_ID,
@@ -94,7 +94,7 @@ static void modbus_slave_process_frame(const uint8_t *request,
         {
             g_modbus_slave_report.protocol_errors++;
         }
-        modbus_slave_update_registers();
+        modbus_slave_update_diagnostics();
         return;
     }
 
@@ -112,7 +112,7 @@ static void modbus_slave_process_frame(const uint8_t *request,
         }
     }
 
-    modbus_slave_update_registers();
+    modbus_slave_update_diagnostics();
 }
 
 /** @brief Initialize the slave example after CubeMX has initialized USART3. */
@@ -137,7 +137,7 @@ HAL_StatusTypeDef modbus_slave_example_init(void)
 
     g_modbus_slave_report.t15_us = g_framer.t15_us;
     g_modbus_slave_report.t35_us = g_framer.t35_us;
-    modbus_slave_update_registers();
+    modbus_slave_update_diagnostics();
     return modbus_port_init(MODBUS_APP_BAUD_RATE);
 }
 
@@ -163,5 +163,5 @@ void modbus_slave_example_poll(void)
     }
 
     g_modbus_slave_report.t15_violations = g_framer.diag.t15_violations;
-    modbus_slave_update_registers();
+    modbus_slave_update_diagnostics();
 }
