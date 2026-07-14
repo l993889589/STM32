@@ -55,7 +55,7 @@
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
           <DebugInformation>1</DebugInformation>
-          <BrowseInformation>1</BrowseInformation>
+          <BrowseInformation>0</BrowseInformation>
           <ListingPath>.\Listings\</ListingPath>
           <HexFormatSelection>1</HexFormatSelection>
           <Merge32K>0</Merge32K>
@@ -391,6 +391,16 @@
               <FilePath>..\..\User\main.c</FilePath>
             </File>
             <File>
+              <FileName>app_flash_check.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_flash_check.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_flash_check.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_flash_check.h</FilePath>
+            </File>
+            <File>
               <FileName>tx_user.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\User\tx_user.h</FilePath>
@@ -489,6 +499,11 @@
               <FileName>bsp_w25q128.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\User\bsp\inc\bsp_w25q128.h</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_flash_layout.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\bsp\inc\bsp_flash_layout.h</FilePath>
             </File>
             <File>
               <FileName>stm32h7xx_it.c</FileName>

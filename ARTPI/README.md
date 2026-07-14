@@ -28,6 +28,12 @@ Open `Project/MDK-ARM(AC6)/art_pi_h750_threadx.uvprojx` with Keil MDK and build 
 
 The application is linked into the STM32H750 internal 128 KiB flash at `0x08000000`, so the first bring-up does not depend on external QSPI boot code.
 
+## W25Q128 data flash layout and validation
+
+The board data flash follows the official ART-Pi 16 MiB layout: 512 KiB Wi-Fi image, 512 KiB Bluetooth image, 2 MiB download area, 1 MiB EasyFlash area, and the remaining space for the filesystem. This project reserves the final 4 KiB sector at `0xFFF000` for explicit diagnostics, so its filesystem region ends before that sector.
+
+Startup calculates standard CRC-32 values across the complete Wi-Fi and Bluetooth partitions and compares them with the official `Resource_16MB.bin` reference (`12BACAD0` and `5F4C7B70`). The destructive erase/write/read-back test is disabled by default. Set `APP_FLASH_DESTRUCTIVE_TEST_ENABLE` to `1U` only for an intentional hardware test. The test refuses to erase unless the reserved sector is already completely erased, writes a cross-page pattern, verifies it, then erases and verifies the sector again.
+
 ## LDC / Modbus submodule
 
 The repository publishes [`l993889589/ld_modbus`](https://github.com/l993889589/ld_modbus) at `ARTPI/ldc` as a Git submodule. Clone the parent repository with `--recurse-submodules`, or run `git submodule update --init --recursive` after cloning.

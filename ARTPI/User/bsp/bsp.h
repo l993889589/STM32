@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "stm32h7xx_hal.h"
 #include "bsp_dwt.h"
+#include "bsp_flash_layout.h"
 #include "bsp_led.h"
 #include "bsp_spi_bus.h"
 #include "bsp_tim.h"

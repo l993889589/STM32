@@ -1,4 +1,5 @@
 #include "includes.h"
+#include "app_flash_check.h"
 
 #define STARTUP_TASK_PRIORITY       2U
 #define HELLO_TASK_PRIORITY         4U
@@ -75,6 +76,8 @@ static void startup_task_entry(ULONG thread_input)
 static void spi_flash_report(void)
 {
     uint32_t jedec_id = 0U;
+    uint32_t wifi_crc32 = 0U;
+    uint32_t bt_crc32 = 0U;
     uint8_t wifi_header[16];
     uint8_t bt_header[16];
     HAL_StatusTypeDef status;
@@ -100,6 +103,18 @@ static void spi_flash_report(void)
         status = bsp_w25q128_read(0x080000U,
                                   bt_header,
                                   sizeof(bt_header));
+    }
+    if (status == HAL_OK)
+    {
+        status = app_flash_crc32(BSP_FLASH_WIFI_IMAGE_ADDRESS,
+                                 BSP_FLASH_WIFI_IMAGE_SIZE,
+                                 &wifi_crc32);
+    }
+    if (status == HAL_OK)
+    {
+        status = app_flash_crc32(BSP_FLASH_BT_IMAGE_ADDRESS,
+                                 BSP_FLASH_BT_IMAGE_SIZE,
+                                 &bt_crc32);
     }
 
     if (status != HAL_OK)
@@ -130,6 +145,39 @@ static void spi_flash_report(void)
                    bt_header[2],
                    bt_header[3]);
     bsp_uart_write_string(BSP_UART_DEBUG, message);
+
+    (void)snprintf(message,
+                   sizeof(message),
+                   "WiFi CRC32=%08lX expected=%08lX [%s]\r\n"
+                   "BT   CRC32=%08lX expected=%08lX [%s]\r\n",
+                   (unsigned long)wifi_crc32,
+                   (unsigned long)BSP_FLASH_WIFI_IMAGE_EXPECTED_CRC32,
+                   (wifi_crc32 == BSP_FLASH_WIFI_IMAGE_EXPECTED_CRC32) ?
+                       "OK" : "MISMATCH",
+                   (unsigned long)bt_crc32,
+                   (unsigned long)BSP_FLASH_BT_IMAGE_EXPECTED_CRC32,
+                   (bt_crc32 == BSP_FLASH_BT_IMAGE_EXPECTED_CRC32) ?
+                       "OK" : "MISMATCH");
+    bsp_uart_write_string(BSP_UART_DEBUG, message);
+
+#if APP_FLASH_DESTRUCTIVE_TEST_ENABLE
+    {
+        app_flash_test_result_t test_result;
+
+        status = app_flash_run_safe_test(&test_result);
+        (void)snprintf(message,
+                       sizeof(message),
+                       "W25Q128 safe test: status=%u stage=%s "
+                       "crc=%08lX/%08lX cleanup=%u erased=%u\r\n",
+                       (unsigned int)status,
+                       app_flash_test_stage_name(test_result.stage),
+                       (unsigned long)test_result.actual_crc32,
+                       (unsigned long)test_result.expected_crc32,
+                       (unsigned int)test_result.cleanup_status,
+                       (unsigned int)test_result.restored_erased);
+        bsp_uart_write_string(BSP_UART_DEBUG, message);
+    }
+#endif
 }
 
 static void hello_task_entry(ULONG thread_input)
