@@ -1,0 +1,10 @@
+Project/MDK-ARM(AC6)/Objects/
+Project/MDK-ARM(AC6)/Listings/
+Project/MDK-ARM(AC6)/*.uvguix.*
+*.axf
+*.bin
+*.hex
+*.map
+*.o
+*.d
+*.log

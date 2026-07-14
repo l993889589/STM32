@@ -1,0 +1,37 @@
+# ART-Pi STM32H750 ThreadX Starter
+
+This project is derived from the H743 ThreadX demo in `../demo`, while adapting the MCU and board wiring to the ART-Pi STM32H750XB.
+
+## First bring-up behavior
+
+- ThreadX startup flow follows the demo: `main` -> `system_init` -> `tx_kernel_enter` -> `tx_application_define` -> startup task -> BSP init -> application tasks. ThreadX owns SysTick throughout kernel operation; the application does not call `HAL_SuspendTick()` or `HAL_ResumeTick()`.
+- UART4 is the log port exposed through the onboard ST-Link virtual COM port.
+  - TX: PA0
+  - RX: PI9
+  - 115200, 8 data bits, no parity, 1 stop bit
+  - The BSP uses a logical-port API and an interrupt-driven TX FIFO. RX has no
+    second FIFO: a single owner binds a block callback, which receives one byte
+    per call today and can receive DMA blocks later without changing the app API.
+- Two active-low LEDs are driven by the LED task.
+  - Blue LED: PI8
+  - Red LED: PC15
+- Timing resources are intentionally separated:
+  - ThreadX owns SysTick at 1 kHz; thread-context millisecond delays sleep.
+  - DWT CYCCNT provides blocking microsecond delays and pre-kernel delays.
+  - TIM2 runs freely at 1 MHz and provides four independent one-shot compare callbacks.
+  - TIM5_CH1 outputs PWM on expansion header P1 pin 32 (PH10). The onboard LEDs are not timer PWM pins.
+- New project-owned functions use lower snake case. Required vendor and RTOS callback names retain their mandated spelling.
+
+## Keil project
+
+Open `Project/MDK-ARM(AC6)/art_pi_h750_threadx.uvprojx` with Keil MDK and build the `Flash` target.
+
+The application is linked into the STM32H750 internal 128 KiB flash at `0x08000000`, so the first bring-up does not depend on external QSPI boot code.
+
+## LDC / Modbus submodule
+
+The repository publishes [`l993889589/ld_modbus`](https://github.com/l993889589/ld_modbus) at `ARTPI/ldc` as a Git submodule. Clone the parent repository with `--recurse-submodules`, or run `git submodule update --init --recursive` after cloning.
+
+## Expected output
+
+After reset, open the ST-Link virtual COM port at 115200 baud. The first line contains `hello`, followed by a periodic ThreadX heartbeat. The two onboard LEDs alternate every 500 ms.
