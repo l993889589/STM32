@@ -341,7 +341,7 @@
               <MiscControls>-Wno-invalid-source-encoding</MiscControls>
               <Define>USE_HAL_DRIVER,STM32H750xx,TX_ENABLE_FPU_SUPPORT,TX_INCLUDE_USER_DEFINE_FILE,NX_INCLUDE_USER_DEFINE_FILE</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\ldc;..\..\ld_modbus\include;..\..\ld_modbus\integrations\ldc;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc;..\..\NetXDuo\ports\cortex_m7\ac5\inc;..\..\NetXDuo\common\inc</IncludePath>
+              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\ldc;..\..\ld_modbus\include;..\..\ld_modbus\integrations\ldc;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc;..\..\NetXDuo\ports\cortex_m7\ac5\inc;..\..\NetXDuo\common\inc;..\..\NetXDuo\addons\dhcp</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -401,6 +401,16 @@
               <FilePath>..\..\User\app_flash_check.h</FilePath>
             </File>
             <File>
+              <FileName>app_device_config.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_device_config.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_device_config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_device_config.h</FilePath>
+            </File>
+            <File>
               <FileName>app_modbus_rtu.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\User\app_modbus_rtu.c</FilePath>
@@ -419,6 +429,16 @@
               <FileName>app_netx.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\User\app_netx.h</FilePath>
+            </File>
+            <File>
+              <FileName>app_netx_services.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_netx_services.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_netx_services.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_netx_services.h</FilePath>
             </File>
             <File>
               <FileName>nx_user.h</FileName>
@@ -4309,6 +4329,21 @@
               <FileName>nxe_udp_source_extract.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\NetXDuo\common\src\nxe_udp_source_extract.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>NetXDuo/DHCP</GroupName>
+          <Files>
+            <File>
+              <FileName>nxd_dhcp_client.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\NetXDuo\addons\dhcp\nxd_dhcp_client.c</FilePath>
+            </File>
+            <File>
+              <FileName>nxd_dhcp_client.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\NetXDuo\addons\dhcp\nxd_dhcp_client.h</FilePath>
             </File>
           </Files>
         </Group>

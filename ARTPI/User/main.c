@@ -1,4 +1,5 @@
 #include "includes.h"
+#include "app_device_config.h"
 #include "app_flash_check.h"
 #include "app_netx.h"
 #include "app_modbus_rtu.h"
@@ -79,9 +80,33 @@ static void startup_task_entry(ULONG thread_input)
 
     if (app_modbus_rtu_start() == HAL_OK)
     {
-        bsp_uart_write_string(BSP_UART_DEBUG,
-                              "Modbus RTU ready: UART5 PB13/TX PB12/RX, PI4 DE, "
-                              "115200 8N1, unit=1\r\n");
+        app_modbus_rtu_config_t config;
+        app_device_config_diagnostics_t storage;
+        char message[128];
+
+        if (app_modbus_rtu_get_config(&config) != HAL_OK)
+        {
+            config.unit_id = APP_MODBUS_RTU_UNIT_ID;
+        }
+        (void)snprintf(message,
+                       sizeof(message),
+                       "Modbus RTU ready: UART5 PB13/TX PB12/RX, PI4 DE, "
+                       "115200 8N1, unit=%u\r\n",
+                       (unsigned int)config.unit_id);
+        bsp_uart_write_string(BSP_UART_DEBUG, message);
+        if (app_device_config_get_diagnostics(&storage) == HAL_OK)
+        {
+            (void)snprintf(message,
+                           sizeof(message),
+                           "Config slots: A=%u/unit%u/seq%lu, B=%u/unit%u/seq%lu\r\n",
+                           (unsigned int)storage.slot_a_valid,
+                           (unsigned int)storage.slot_a_modbus_unit_id,
+                           (unsigned long)storage.slot_a_sequence,
+                           (unsigned int)storage.slot_b_valid,
+                           (unsigned int)storage.slot_b_modbus_unit_id,
+                           (unsigned long)storage.slot_b_sequence);
+            bsp_uart_write_string(BSP_UART_DEBUG, message);
+        }
         bsp_uart_write_string(BSP_UART_DEBUG,
                               "Blue LED is the 500 ms heartbeat; coils 0/1 control "
                               "red LED/buzzer; "

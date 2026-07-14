@@ -21,6 +21,7 @@ LR_IROM1 0x08000000 0x00020000
     RW_NETX 0x24002800 UNINIT 0x00010000
     {
         app_netx.o (.bss.netx)
+        app_netx_services.o (.bss.netx)
     }
 
     RW_ETH_DMA 0x30040000 UNINIT 0x00008000

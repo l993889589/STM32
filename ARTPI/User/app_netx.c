@@ -1,6 +1,8 @@
 #include "includes.h"
 #include "app_netx.h"
+#include "app_netx_services.h"
 
+#include "nxd_dhcp_client.h"
 #include "nx_ip.h"
 
 #define APP_NETX_PACKET_PAYLOAD_SIZE       1536U
@@ -22,6 +24,10 @@ static TX_THREAD netx_link_thread;
 static NX_IP *netx_driver_ip;
 static NX_INTERFACE *netx_driver_interface;
 static uint8_t netx_started;
+static volatile UCHAR netx_dhcp_state = NX_DHCP_STATE_NOT_STARTED;
+
+__attribute__((section(".bss.netx"), aligned(32)))
+static NX_DHCP netx_dhcp;
 
 __attribute__((section(".bss.netx"), aligned(32)))
 static uint8_t netx_packet_pool_memory[APP_NETX_PACKET_POOL_SIZE];
@@ -47,6 +53,10 @@ static void app_netx_receive(void);
 static void app_netx_rx_ready(void *argument);
 static void app_netx_link_thread_entry(ULONG input);
 static void app_netx_report_link(const bsp_eth_link_t *link);
+static void app_netx_dhcp_state_change(NX_DHCP *dhcp, UCHAR new_state);
+static void app_netx_report_dhcp_state(UCHAR state);
+static void app_netx_report_address(void);
+static void app_netx_format_ipv4(ULONG address, char *text, size_t text_size);
 
 UINT app_netx_start(void)
 {
@@ -72,8 +82,8 @@ UINT app_netx_start(void)
 
     status = nx_ip_create(&netx_ip,
                           "art_pi_ethernet",
-                          APP_NETX_IP_ADDRESS,
-                          APP_NETX_NETWORK_MASK,
+                          IP_ADDRESS(0, 0, 0, 0),
+                          IP_ADDRESS(0, 0, 0, 0),
                           &netx_packet_pool,
                           app_netx_driver,
                           netx_ip_stack,
@@ -92,7 +102,40 @@ UINT app_netx_start(void)
         return status;
     }
 
+    status = nx_udp_enable(&netx_ip);
+    if (status != NX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = nx_tcp_enable(&netx_ip);
+    if (status != NX_SUCCESS)
+    {
+        return status;
+    }
+
     status = nx_icmp_enable(&netx_ip);
+    if (status != NX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = nx_dhcp_create(&netx_dhcp,
+                            &netx_ip,
+                            "art_pi_dhcp");
+    if (status != NX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = nx_dhcp_state_change_notify(&netx_dhcp,
+                                         app_netx_dhcp_state_change);
+    if (status != NX_SUCCESS)
+    {
+        return status;
+    }
+
+    status = nx_dhcp_start(&netx_dhcp);
     if (status != NX_SUCCESS)
     {
         return status;
@@ -116,7 +159,7 @@ UINT app_netx_start(void)
     netx_started = 1U;
     (void)snprintf(message,
                    sizeof(message),
-                   "NetX Duo ready: IPv4 192.168.1.50/24, MAC "
+                   "NetX Duo ready: DHCP started, MAC "
                    "02:80:E1:75:00:01\r\n");
     bsp_uart_write_string(BSP_UART_DEBUG, message);
     return NX_SUCCESS;
@@ -340,6 +383,8 @@ static void app_netx_rx_ready(void *argument)
 static void app_netx_link_thread_entry(ULONG input)
 {
     uint8_t previous_link = 0xFFU;
+    UCHAR previous_dhcp_state = 0xFFU;
+    ULONG previous_ip_address = 0UL;
 
     (void)input;
 
@@ -365,6 +410,38 @@ static void app_netx_link_thread_entry(ULONG input)
             app_netx_report_link(&link);
         }
 
+        if (netx_dhcp_state != previous_dhcp_state)
+        {
+            previous_dhcp_state = netx_dhcp_state;
+            app_netx_report_dhcp_state(previous_dhcp_state);
+        }
+
+        if (previous_dhcp_state >= NX_DHCP_STATE_BOUND)
+        {
+            ULONG ip_address;
+            ULONG network_mask;
+
+            if ((nx_ip_address_get(&netx_ip,
+                                   &ip_address,
+                                   &network_mask) == NX_SUCCESS) &&
+                (ip_address != 0UL) &&
+                (ip_address != previous_ip_address))
+            {
+                previous_ip_address = ip_address;
+                app_netx_report_address();
+                if (app_netx_services_start(&netx_ip,
+                                            &netx_packet_pool) != NX_SUCCESS)
+                {
+                    bsp_uart_write_string(BSP_UART_DEBUG,
+                                          "NetX services start failed\r\n");
+                }
+            }
+        }
+        else
+        {
+            previous_ip_address = 0UL;
+        }
+
         tx_thread_sleep(APP_NETX_LINK_POLL_TICKS);
     }
 }
@@ -387,4 +464,107 @@ static void app_netx_report_link(const bsp_eth_link_t *link)
                    (unsigned int)link->speed_mbps,
                    (link->full_duplex != 0U) ? "full" : "half");
     bsp_uart_write_string(BSP_UART_DEBUG, message);
+}
+
+static void app_netx_dhcp_state_change(NX_DHCP *dhcp, UCHAR new_state)
+{
+    (void)dhcp;
+    netx_dhcp_state = new_state;
+}
+
+static void app_netx_report_dhcp_state(UCHAR state)
+{
+    const char *name;
+    char message[64];
+
+    switch (state)
+    {
+        case NX_DHCP_STATE_NOT_STARTED:
+            name = "not started";
+            break;
+        case NX_DHCP_STATE_BOOT:
+            name = "boot";
+            break;
+        case NX_DHCP_STATE_INIT:
+            name = "init";
+            break;
+        case NX_DHCP_STATE_SELECTING:
+            name = "selecting";
+            break;
+        case NX_DHCP_STATE_REQUESTING:
+            name = "requesting";
+            break;
+        case NX_DHCP_STATE_BOUND:
+            name = "bound";
+            break;
+        case NX_DHCP_STATE_RENEWING:
+            name = "renewing";
+            break;
+        case NX_DHCP_STATE_REBINDING:
+            name = "rebinding";
+            break;
+        case NX_DHCP_STATE_FORCERENEW:
+            name = "force renew";
+            break;
+        case NX_DHCP_STATE_ADDRESS_PROBING:
+            name = "address probing";
+            break;
+        default:
+            name = "unknown";
+            break;
+    }
+
+    (void)snprintf(message,
+                   sizeof(message),
+                   "DHCP state: %s (%u)\r\n",
+                   name,
+                   (unsigned int)state);
+    bsp_uart_write_string(BSP_UART_DEBUG, message);
+}
+
+static void app_netx_report_address(void)
+{
+    ULONG ip_address;
+    ULONG network_mask;
+    ULONG gateway_address = 0UL;
+    ULONG server_address = 0UL;
+    char ip_text[16];
+    char mask_text[16];
+    char gateway_text[16];
+    char server_text[16];
+    char message[128];
+
+    if (nx_ip_address_get(&netx_ip,
+                          &ip_address,
+                          &network_mask) != NX_SUCCESS)
+    {
+        return;
+    }
+
+    (void)nx_ip_gateway_address_get(&netx_ip, &gateway_address);
+    (void)nx_dhcp_server_address_get(&netx_dhcp, &server_address);
+    app_netx_format_ipv4(ip_address, ip_text, sizeof(ip_text));
+    app_netx_format_ipv4(network_mask, mask_text, sizeof(mask_text));
+    app_netx_format_ipv4(gateway_address, gateway_text, sizeof(gateway_text));
+    app_netx_format_ipv4(server_address, server_text, sizeof(server_text));
+
+    (void)snprintf(message,
+                   sizeof(message),
+                   "DHCP address: IP=%s mask=%s gateway=%s server=%s\r\n",
+                   ip_text,
+                   mask_text,
+                   gateway_text,
+                   server_text);
+    bsp_uart_write_string(BSP_UART_DEBUG, message);
+}
+
+static void app_netx_format_ipv4(ULONG address, char *text, size_t text_size)
+{
+    (void)snprintf(text,
+                   text_size,
+                   "%lu.%lu.%lu.%lu",
+                   (unsigned long)((address >> 24) & 0xFFUL),
+                   (unsigned long)((address >> 16) & 0xFFUL),
+                   (unsigned long)((address >> 8) & 0xFFUL),
+                   (unsigned long)(address & 0xFFUL));
 }

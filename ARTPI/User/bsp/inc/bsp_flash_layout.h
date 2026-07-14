@@ -17,6 +17,15 @@
 #define BSP_FLASH_EASYFLASH_ADDRESS           0x300000UL
 #define BSP_FLASH_EASYFLASH_SIZE              (1UL * 1024UL * 1024UL)
 
+/* Two power-loss-tolerant configuration slots at the end of EasyFlash. */
+#define BSP_FLASH_CONFIG_SLOT_A_ADDRESS        \
+    (BSP_FLASH_EASYFLASH_ADDRESS + BSP_FLASH_EASYFLASH_SIZE - \
+     (2UL * BSP_W25Q128_SECTOR_SIZE))
+#define BSP_FLASH_CONFIG_SLOT_B_ADDRESS        \
+    (BSP_FLASH_EASYFLASH_ADDRESS + BSP_FLASH_EASYFLASH_SIZE - \
+     BSP_W25Q128_SECTOR_SIZE)
+#define BSP_FLASH_CONFIG_SLOT_SIZE             BSP_W25Q128_SECTOR_SIZE
+
 #define BSP_FLASH_FILESYSTEM_ADDRESS          0x400000UL
 
 /*
@@ -48,6 +57,11 @@
 #if ((BSP_FLASH_EASYFLASH_ADDRESS + BSP_FLASH_EASYFLASH_SIZE) != \
      BSP_FLASH_FILESYSTEM_ADDRESS)
 #error "ART-Pi EasyFlash and filesystem partitions are not contiguous"
+#endif
+
+#if ((BSP_FLASH_CONFIG_SLOT_B_ADDRESS + BSP_FLASH_CONFIG_SLOT_SIZE) != \
+     BSP_FLASH_FILESYSTEM_ADDRESS)
+#error "ART-Pi configuration slots must end at the EasyFlash boundary"
 #endif
 
 #if ((BSP_FLASH_DIAGNOSTIC_ADDRESS + BSP_FLASH_DIAGNOSTIC_SIZE) != \
