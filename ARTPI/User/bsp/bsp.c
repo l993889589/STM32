@@ -167,6 +167,13 @@ static void mpu_config(void)
     region.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
     HAL_MPU_ConfigRegion(&region);
 
+    region.BaseAddress = 0x30040000U;
+    region.Size = MPU_REGION_SIZE_32KB;
+    region.IsShareable = MPU_ACCESS_SHAREABLE;
+    region.Number = MPU_REGION_NUMBER1;
+    region.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&region);
+
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 }
 

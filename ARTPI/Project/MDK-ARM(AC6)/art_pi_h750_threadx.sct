@@ -17,4 +17,14 @@ LR_IROM1 0x08000000 0x00020000
         bsp_spi_bus.o (.bss.bsp_dma)
         bsp_sdio_wifi.o (.bss.sdio_dma)
     }
+
+    RW_NETX 0x24002800 UNINIT 0x00010000
+    {
+        app_netx.o (.bss.netx)
+    }
+
+    RW_ETH_DMA 0x30040000 UNINIT 0x00008000
+    {
+        bsp_eth.o (.bss.eth_dma)
+    }
 }

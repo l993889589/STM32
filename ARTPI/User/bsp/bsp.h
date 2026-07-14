@@ -5,6 +5,7 @@
 #include "stm32h7xx_hal.h"
 #include "bsp_beep.h"
 #include "bsp_dwt.h"
+#include "bsp_eth.h"
 #include "bsp_flash_layout.h"
 #include "bsp_led.h"
 #include "bsp_rs485.h"

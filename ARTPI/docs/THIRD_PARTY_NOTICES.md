@@ -20,3 +20,13 @@ This starter project includes vendor and RTOS source copied from the supplied H7
 - Upstream component: STM32H7 HAL driver as supplied by the demo
 - License file: `Libraries/STM32H7xx_HAL_Driver/License.md`
 
+## Eclipse ThreadX NetX Duo
+
+- Location: `NetXDuo/`
+- Upstream: https://github.com/eclipse-threadx/netxduo
+- Version: `v6.1.7_rel`
+- Commit: `c187d60014b149ee7c5e79b4d84c416caddbdef7`
+- Imported paths: `NetXDuo/common`, `NetXDuo/ports/cortex_m7/ac5`
+- License files: `NetXDuo/LICENSE.txt` and `NetXDuo/LICENSED-HARDWARE.txt`
+
+The imported NetX Duo sources are kept unmodified; project-specific configuration is provided by `User/nx_user.h`.

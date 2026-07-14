@@ -1,5 +1,6 @@
 #include "includes.h"
 #include "app_flash_check.h"
+#include "app_netx.h"
 #include "app_modbus_rtu.h"
 #include "app_wifi.h"
 
@@ -69,6 +70,12 @@ static void startup_task_entry(ULONG thread_input)
 
     spi_flash_report();
     (void)app_wifi_start_and_scan();
+
+    if (app_netx_start() != NX_SUCCESS)
+    {
+        bsp_uart_write_string(BSP_UART_DEBUG,
+                              "NetX Duo Ethernet start failed\r\n");
+    }
 
     if (app_modbus_rtu_start() == HAL_OK)
     {
