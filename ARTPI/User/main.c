@@ -1,24 +1,20 @@
 #include "includes.h"
 #include "app_flash_check.h"
+#include "app_wifi.h"
 
 #define STARTUP_TASK_PRIORITY       2U
-#define HELLO_TASK_PRIORITY         4U
 #define LED_TASK_PRIORITY           5U
 
-#define STARTUP_TASK_STACK_SIZE  2048U
-#define HELLO_TASK_STACK_SIZE    2048U
+#define STARTUP_TASK_STACK_SIZE  8192U
 #define LED_TASK_STACK_SIZE      1024U
 
 static TX_THREAD startup_task_control_block;
-static TX_THREAD hello_task_control_block;
 static TX_THREAD led_task_control_block;
 
 static uint64_t startup_task_stack[STARTUP_TASK_STACK_SIZE / sizeof(uint64_t)];
-static uint64_t hello_task_stack[HELLO_TASK_STACK_SIZE / sizeof(uint64_t)];
 static uint64_t led_task_stack[LED_TASK_STACK_SIZE / sizeof(uint64_t)];
 
 static void startup_task_entry(ULONG thread_input);
-static void hello_task_entry(ULONG thread_input);
 static void led_task_entry(ULONG thread_input);
 static void application_tasks_create(void);
 static void spi_flash_report(void);
@@ -64,6 +60,7 @@ static void startup_task_entry(ULONG thread_input)
                           "DWT delay ready, TIM2 1MHz timer ready, PWM: P1 pin 32/PH10\r\n");
 
     spi_flash_report();
+    (void)app_wifi_start_and_scan();
 
     application_tasks_create();
 
@@ -180,26 +177,6 @@ static void spi_flash_report(void)
 #endif
 }
 
-static void hello_task_entry(ULONG thread_input)
-{
-    ULONG heartbeat = 0UL;
-    char message[96];
-
-    (void)thread_input;
-
-    while (1)
-    {
-        (void)snprintf(message,
-                       sizeof(message),
-                       "hello heartbeat %lu, tick=%lu\r\n",
-                       heartbeat,
-                       tx_time_get());
-        bsp_uart_write_string(BSP_UART_DEBUG, message);
-        heartbeat++;
-        tx_thread_sleep(1000U);
-    }
-}
-
 static void led_task_entry(ULONG thread_input)
 {
     (void)thread_input;
@@ -217,17 +194,6 @@ static void led_task_entry(ULONG thread_input)
 
 static void application_tasks_create(void)
 {
-    (void)tx_thread_create(&hello_task_control_block,
-                           "hello_task",
-                           hello_task_entry,
-                           0UL,
-                           hello_task_stack,
-                           sizeof(hello_task_stack),
-                           HELLO_TASK_PRIORITY,
-                           HELLO_TASK_PRIORITY,
-                           TX_NO_TIME_SLICE,
-                           TX_AUTO_START);
-
     (void)tx_thread_create(&led_task_control_block,
                            "led_task",
                            led_task_entry,

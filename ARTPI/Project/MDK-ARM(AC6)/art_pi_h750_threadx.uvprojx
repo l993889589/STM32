@@ -341,7 +341,7 @@
               <MiscControls>-Wno-invalid-source-encoding</MiscControls>
               <Define>USE_HAL_DRIVER,STM32H750xx,TX_ENABLE_FPU_SUPPORT,TX_INCLUDE_USER_DEFINE_FILE</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User;..\..\User\bsp;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc</IncludePath>
+              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -414,6 +414,46 @@
               <FileName>tx_port.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\ThreadX\ports\cortex_m7\ac6\inc\tx_port.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>AP6212</GroupName>
+          <Files>
+            <File>
+              <FileName>app_wifi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_wifi.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_wifi.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_wifi.h</FilePath>
+            </File>
+            <File>
+              <FileName>ap6212_wiced.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\ap6212\inc\ap6212_wiced.h</FilePath>
+            </File>
+            <File>
+              <FileName>ap6212_wiced_rtos.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\ap6212\src\ap6212_wiced_rtos.c</FilePath>
+            </File>
+            <File>
+              <FileName>ap6212_wiced_buffer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\ap6212\src\ap6212_wiced_buffer.c</FilePath>
+            </File>
+            <File>
+              <FileName>ap6212_wiced_platform.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\ap6212\src\ap6212_wiced_platform.c</FilePath>
+            </File>
+            <File>
+              <FileName>libwifi_6212_armcm7_2.1.2_armcc.lib</FileName>
+              <FileType>4</FileType>
+              <FilePath>..\..\Libraries\AP6212\libwifi_6212_armcm7_2.1.2_armcc.lib</FilePath>
             </File>
           </Files>
         </Group>
@@ -504,6 +544,16 @@
               <FileName>bsp_flash_layout.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\User\bsp\inc\bsp_flash_layout.h</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_sdio_wifi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\bsp\src\bsp_sdio_wifi.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_sdio_wifi.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\bsp\inc\bsp_sdio_wifi.h</FilePath>
             </File>
             <File>
               <FileName>stm32h7xx_it.c</FileName>
@@ -599,6 +649,11 @@
               <FileName>stm32h7xx_ll_fmc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\Libraries\STM32H7xx_HAL_Driver\Src\stm32h7xx_ll_fmc.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32h7xx_ll_sdmmc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Libraries\STM32H7xx_HAL_Driver\Src\stm32h7xx_ll_sdmmc.c</FilePath>
             </File>
             <File>
               <FileName>stm32h7xx_hal_uart.c</FileName>

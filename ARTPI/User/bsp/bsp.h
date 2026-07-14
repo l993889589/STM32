@@ -6,6 +6,7 @@
 #include "bsp_dwt.h"
 #include "bsp_flash_layout.h"
 #include "bsp_led.h"
+#include "bsp_sdio_wifi.h"
 #include "bsp_spi_bus.h"
 #include "bsp_tim.h"
 #include "bsp_tim_pwm.h"
