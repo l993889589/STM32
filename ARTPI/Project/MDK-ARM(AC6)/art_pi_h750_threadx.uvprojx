@@ -341,7 +341,7 @@
               <MiscControls>-Wno-invalid-source-encoding</MiscControls>
               <Define>USE_HAL_DRIVER,STM32H750xx,TX_ENABLE_FPU_SUPPORT,TX_INCLUDE_USER_DEFINE_FILE</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc</IncludePath>
+              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\ldc;..\..\ld_modbus\include;..\..\ld_modbus\integrations\ldc;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -399,6 +399,16 @@
               <FileName>app_flash_check.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\User\app_flash_check.h</FilePath>
+            </File>
+            <File>
+              <FileName>app_modbus_rtu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_modbus_rtu.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_modbus_rtu.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_modbus_rtu.h</FilePath>
             </File>
             <File>
               <FileName>tx_user.h</FileName>
@@ -521,6 +531,26 @@
               <FilePath>..\..\User\bsp\inc\bsp_uart.h</FilePath>
             </File>
             <File>
+              <FileName>bsp_rs485.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\bsp\src\bsp_rs485.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_rs485.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\bsp\inc\bsp_rs485.h</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_beep.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\bsp\src\bsp_beep.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_beep.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\bsp\inc\bsp_beep.h</FilePath>
+            </File>
+            <File>
               <FileName>bsp_spi_bus.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\User\bsp\src\bsp_spi_bus.c</FilePath>
@@ -569,6 +599,86 @@
               <FileName>stm32h7xx_hal_timebase_tim.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\User\bsp\stm32h7xx_hal_timebase_tim.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>LDC</GroupName>
+          <Files>
+            <File>
+              <FileName>ldc_core.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ldc\ldc_core.c</FilePath>
+            </File>
+            <File>
+              <FileName>ldc_easy.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ldc\ldc_easy.c</FilePath>
+            </File>
+            <File>
+              <FileName>ldc_packet.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ldc\ldc_packet.c</FilePath>
+            </File>
+            <File>
+              <FileName>ldc_ring.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ldc\ldc_ring.c</FilePath>
+            </File>
+            <File>
+              <FileName>ldc_core.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\ldc\ldc_core.h</FilePath>
+            </File>
+            <File>
+              <FileName>ldc_easy.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\ldc\ldc_easy.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>LD Modbus</GroupName>
+          <Files>
+            <File>
+              <FileName>ld_modbus_client.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ld_modbus\src\ld_modbus_client.c</FilePath>
+            </File>
+            <File>
+              <FileName>ld_modbus_core.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ld_modbus\src\ld_modbus_core.c</FilePath>
+            </File>
+            <File>
+              <FileName>ld_modbus_rtu_framer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ld_modbus\src\ld_modbus_rtu_framer.c</FilePath>
+            </File>
+            <File>
+              <FileName>ld_modbus_server.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ld_modbus\src\ld_modbus_server.c</FilePath>
+            </File>
+            <File>
+              <FileName>ld_modbus_ldc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\ld_modbus\integrations\ldc\ld_modbus_ldc.c</FilePath>
+            </File>
+            <File>
+              <FileName>ld_modbus.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\ld_modbus\include\ld_modbus.h</FilePath>
+            </File>
+            <File>
+              <FileName>ld_modbus_server.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\ld_modbus\include\ld_modbus_server.h</FilePath>
+            </File>
+            <File>
+              <FileName>ld_modbus_ldc.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\ld_modbus\integrations\ldc\ld_modbus_ldc.h</FilePath>
             </File>
           </Files>
         </Group>

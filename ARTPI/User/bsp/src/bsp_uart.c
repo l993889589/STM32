@@ -32,12 +32,13 @@
 #define BSP_UART4_RX_PIN        GPIO_PIN_9
 #define BSP_UART4_RX_AF         GPIO_AF8_UART4
 
-#define BSP_UART5_TX_PORT       GPIOC
-#define BSP_UART5_TX_PIN        GPIO_PIN_12
-#define BSP_UART5_TX_AF         GPIO_AF8_UART5
-#define BSP_UART5_RX_PORT       GPIOD
-#define BSP_UART5_RX_PIN        GPIO_PIN_2
-#define BSP_UART5_RX_AF         GPIO_AF8_UART5
+/* INDUSTRY-IO RS485 transceiver. */
+#define BSP_UART5_TX_PORT       GPIOB
+#define BSP_UART5_TX_PIN        GPIO_PIN_13
+#define BSP_UART5_TX_AF         GPIO_AF14_UART5
+#define BSP_UART5_RX_PORT       GPIOB
+#define BSP_UART5_RX_PIN        GPIO_PIN_12
+#define BSP_UART5_RX_AF         GPIO_AF14_UART5
 
 #define BSP_UART6_TX_PORT       GPIOG
 #define BSP_UART6_TX_PIN        GPIO_PIN_14

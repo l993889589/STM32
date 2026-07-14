@@ -12,9 +12,17 @@ This project is derived from the H743 ThreadX demo in `../demo`, while adapting 
   - The BSP uses a logical-port API and an interrupt-driven TX FIFO. RX has no
     second FIFO: a single owner binds a block callback, which receives one byte
     per call today and can receive DMA blocks later without changing the app API.
-- Two active-low LEDs are driven by the LED task.
-  - Blue LED: PI8
-  - Red LED: PC15
+- Two active-low LEDs have separate ownership.
+  - Blue LED PI8 is toggled every 500 ms by a ThreadX heartbeat task. The task
+    does not print anything to UART.
+  - Red LED PC15 is available as a Modbus-controlled output.
+- The INDUSTRY-IO board is initialized with the same BSP callback pattern as
+  the demo project.
+  - Active buzzer: PH7, active high, forced off before GPIO initialization
+  - RS485 UART5 TX/RX: PB13/PB12, AF14, 115200 8N1
+  - RS485 DE + /RE: PI4, low for receive and high for transmit
+  - PI4 returns low only from the UART transmission-complete interrupt, after
+    the final stop bit has left the MCU
 - Timing resources are intentionally separated:
   - ThreadX owns SysTick at 1 kHz; thread-context millisecond delays sleep.
   - DWT CYCCNT provides blocking microsecond delays and pre-kernel delays.
@@ -34,10 +42,36 @@ The board data flash follows the official ART-Pi 16 MiB layout: 512 KiB Wi-Fi im
 
 Startup calculates standard CRC-32 values across the complete Wi-Fi and Bluetooth partitions and compares them with the official `Resource_16MB.bin` reference (`12BACAD0` and `5F4C7B70`). The destructive erase/write/read-back test is disabled by default. Set `APP_FLASH_DESTRUCTIVE_TEST_ENABLE` to `1U` only for an intentional hardware test. The test refuses to erase unless the reserved sector is already completely erased, writes a cross-page pattern, verifies it, then erases and verifies the sector again.
 
-## LDC / Modbus submodule
+## LDC / Modbus RTU
 
-The repository publishes [`l993889589/ld_modbus`](https://github.com/l993889589/ld_modbus) at `ARTPI/ldc` as a Git submodule. Clone the parent repository with `--recurse-submodules`, or run `git submodule update --init --recursive` after cloning.
+The parent repository keeps two independent submodules:
+
+- [`l993889589/ldc`](https://github.com/l993889589/ldc) at `ARTPI/ldc`
+- [`l993889589/ld_modbus`](https://github.com/l993889589/ld_modbus) at `ARTPI/ld_modbus`
+
+`app_modbus_rtu` binds UART5 RX interrupts to an LDC queue with a 1750 us idle
+frame timeout. A ThreadX task, not the interrupt handler, consumes complete
+frames and runs the `ld_modbus` server. The server uses unit ID 1 and exposes
+16 elements in each Modbus table. Coils 0 and 1 control the red LED and buzzer;
+the blue LED remains dedicated to the heartbeat. Input registers 0 through 7 contain board identity and live
+communication diagnostics.
+
+For a physical test, connect a USB-RS485 converter A-to-A, B-to-B, and GND-to-GND
+without connecting its VCC pin. Then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Tools\modbus_rtu_test.ps1 -Port COMxx
+```
+
+The script verifies RTU CRC, reads the board ID, writes and reads a holding
+register, briefly exercises the red LED and buzzer, and restores both outputs
+to off. Clone the parent repository with `--recurse-submodules`, or run
+`git submodule update --init --recursive` after cloning.
 
 ## Expected output
 
-After reset, open the ST-Link virtual COM port at 115200 baud. The first line contains `hello`, followed by a periodic ThreadX heartbeat. The two onboard LEDs alternate every 500 ms.
+After reset, open the ST-Link virtual COM port at 115200 baud. Startup prints
+`hello`, performs one 100 ms buzzer self-test, verifies the external flash
+images, scans Wi-Fi through AP6212, and finally reports that Modbus RTU is
+ready. There is no periodic UART heartbeat output; the blue LED continues to
+blink every 500 ms as the board-alive indicator.

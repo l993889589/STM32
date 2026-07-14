@@ -7,12 +7,14 @@
 
 #define AP6212_WIFI_IMAGE_SIZE 355159U
 #define AP6212_SDIO_RETRY_COUNT     3U
+#define AP6212_SDIO_INITIAL_RECOVERY_COUNT 1U
 
 static uint16_t function_block_sizes[3] = {64U, 64U, 512U};
 static uint32_t sdio_transfer_count;
 static uint32_t resource_read_count;
 static bsp_sdio_wifi_probe_result_t wiced_probe_result;
 static uint8_t wiced_bus_enumerated;
+static uint8_t sdio_initial_recovery_count;
 
 static const char wifi_nvram_image[] =
     "manfid=0x2d0" "\x00"
@@ -77,6 +79,7 @@ wwd_result_t host_platform_bus_init(void)
     }
     wiced_bus_enumerated = 1U;
     sdio_transfer_count = 0U;
+    sdio_initial_recovery_count = 0U;
     return WWD_SUCCESS;
 }
 
@@ -121,6 +124,8 @@ wwd_result_t host_platform_sdio_transfer(int32_t direction,
     }
 
     block_size = function_block_sizes[function];
+
+transfer_retry:
     for (retry = 0U; retry < AP6212_SDIO_RETRY_COUNT; retry++)
     {
         status = bsp_sdio_wifi_transfer((direction != 0) ? 1U : 0U,
@@ -148,6 +153,27 @@ wwd_result_t host_platform_sdio_transfer(int32_t direction,
             }
             sdio_transfer_count++;
             return WWD_SUCCESS;
+        }
+    }
+
+    if ((sdio_transfer_count == 0U) &&
+        (sdio_initial_recovery_count < AP6212_SDIO_INITIAL_RECOVERY_COUNT))
+    {
+        sdio_initial_recovery_count++;
+        wiced_bus_enumerated = 0U;
+        bsp_uart_write_string(BSP_UART_DEBUG,
+                              "SDIO initial transfer recovery: power-cycle and enumerate\r\n");
+
+        memset(&wiced_probe_result, 0, sizeof(wiced_probe_result));
+        status = bsp_sdio_wifi_init();
+        if (status == HAL_OK)
+        {
+            status = bsp_sdio_wifi_probe(&wiced_probe_result);
+        }
+        if (status == HAL_OK)
+        {
+            wiced_bus_enumerated = 1U;
+            goto transfer_retry;
         }
     }
 

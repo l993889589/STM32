@@ -5,6 +5,8 @@
 #define BSP_SDIO_WIFI_INITIAL_CLOCK       400000U
 #define BSP_SDIO_WIFI_COMMAND_TIMEOUT_MS      20U
 #define BSP_SDIO_WIFI_POWER_TIMEOUT_MS      1000U
+#define BSP_SDIO_WIFI_RESET_LOW_MS           100U
+#define BSP_SDIO_WIFI_STARTUP_MS             200U
 
 #define BSP_SDIO_WIFI_CMD_GO_IDLE_STATE        0U
 #define BSP_SDIO_WIFI_CMD_IO_SEND_OP_COND       5U
@@ -63,7 +65,11 @@ HAL_StatusTypeDef bsp_sdio_wifi_init(void)
     gpio_config.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOC, &gpio_config);
 
-    bsp_delay_ms(10U);
+    /*
+     * A running AP6212 can survive an MCU-only reset. Keep WL_REG_ON low long
+     * enough to reset the module itself before rebuilding the SDIO host state.
+     */
+    bsp_delay_ms(BSP_SDIO_WIFI_RESET_LOW_MS);
     bsp_sdio_wifi_gpio_init();
 
     status = bsp_sdio_wifi_clock_init();
@@ -73,7 +79,7 @@ HAL_StatusTypeDef bsp_sdio_wifi_init(void)
     }
 
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
-    bsp_delay_ms(200U);
+    bsp_delay_ms(BSP_SDIO_WIFI_STARTUP_MS);
 
     return HAL_OK;
 }

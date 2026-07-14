@@ -32,6 +32,12 @@ void bsp_init(void)
     }
 
     bsp_uart_init();
+    if (bsp_rs485_init() != HAL_OK)
+    {
+        BSP_ERROR();
+    }
+
+    bsp_beep_init();
     bsp_led_init();
 }
 

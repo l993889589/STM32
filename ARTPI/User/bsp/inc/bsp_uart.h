@@ -13,7 +13,7 @@
 #define BSP_UART2_ENABLED              0
 #define BSP_UART3_ENABLED              0
 #define BSP_UART4_ENABLED              1
-#define BSP_UART5_ENABLED              0
+#define BSP_UART5_ENABLED              1
 #define BSP_UART6_ENABLED              0
 #define BSP_UART7_ENABLED              0
 #define BSP_UART8_ENABLED              0

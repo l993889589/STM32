@@ -1,5 +1,6 @@
 #include "includes.h"
 #include "app_flash_check.h"
+#include "app_modbus_rtu.h"
 #include "app_wifi.h"
 
 #define STARTUP_TASK_PRIORITY       2U
@@ -51,6 +52,7 @@ static void startup_task_entry(ULONG thread_input)
     (void)thread_input;
 
     bsp_init();
+    application_tasks_create();
 
     bsp_uart_write_string(BSP_UART_DEBUG,
                           "\r\nhello from ART-Pi STM32H750 ThreadX\r\n");
@@ -59,15 +61,62 @@ static void startup_task_entry(ULONG thread_input)
     bsp_uart_write_string(BSP_UART_DEBUG,
                           "DWT delay ready, TIM2 1MHz timer ready, PWM: P1 pin 32/PH10\r\n");
 
+    bsp_beep_on();
+    (void)tx_thread_sleep(100U);
+    bsp_beep_off();
+    bsp_uart_write_string(BSP_UART_DEBUG,
+                          "INDUSTRY-IO: buzzer PH7 self-test complete\r\n");
+
     spi_flash_report();
     (void)app_wifi_start_and_scan();
 
-    application_tasks_create();
+    if (app_modbus_rtu_start() == HAL_OK)
+    {
+        bsp_uart_write_string(BSP_UART_DEBUG,
+                              "Modbus RTU ready: UART5 PB13/TX PB12/RX, PI4 DE, "
+                              "115200 8N1, unit=1\r\n");
+        bsp_uart_write_string(BSP_UART_DEBUG,
+                              "Blue LED is the 500 ms heartbeat; coils 0/1 control "
+                              "red LED/buzzer; "
+                              "input registers 0..7 report ID and diagnostics\r\n");
+    }
+    else
+    {
+        bsp_uart_write_string(BSP_UART_DEBUG,
+                              "Modbus RTU start failed\r\n");
+    }
 
     while (1)
     {
         tx_thread_sleep(1000U);
     }
+}
+
+static void led_task_entry(ULONG thread_input)
+{
+    (void)thread_input;
+
+    bsp_led_off(BSP_LED_BLUE);
+
+    while (1)
+    {
+        (void)tx_thread_sleep(500U);
+        bsp_led_toggle(BSP_LED_BLUE);
+    }
+}
+
+static void application_tasks_create(void)
+{
+    (void)tx_thread_create(&led_task_control_block,
+                           "led_heartbeat_task",
+                           led_task_entry,
+                           0UL,
+                           led_task_stack,
+                           sizeof(led_task_stack),
+                           LED_TASK_PRIORITY,
+                           LED_TASK_PRIORITY,
+                           TX_NO_TIME_SLICE,
+                           TX_AUTO_START);
 }
 
 static void spi_flash_report(void)
@@ -175,33 +224,4 @@ static void spi_flash_report(void)
         bsp_uart_write_string(BSP_UART_DEBUG, message);
     }
 #endif
-}
-
-static void led_task_entry(ULONG thread_input)
-{
-    (void)thread_input;
-
-    bsp_led_on(BSP_LED_BLUE);
-    bsp_led_off(BSP_LED_RED);
-
-    while (1)
-    {
-        tx_thread_sleep(500U);
-        bsp_led_toggle(BSP_LED_BLUE);
-        bsp_led_toggle(BSP_LED_RED);
-    }
-}
-
-static void application_tasks_create(void)
-{
-    (void)tx_thread_create(&led_task_control_block,
-                           "led_task",
-                           led_task_entry,
-                           0UL,
-                           led_task_stack,
-                           sizeof(led_task_stack),
-                           LED_TASK_PRIORITY,
-                           LED_TASK_PRIORITY,
-                           TX_NO_TIME_SLICE,
-                           TX_AUTO_START);
 }
