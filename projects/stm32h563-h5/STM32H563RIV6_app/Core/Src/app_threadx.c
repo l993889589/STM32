@@ -38,6 +38,7 @@
 #include "app_ui.h"
 #include "app_debug.h"
 #include "bsp_timer.h"
+#include "ldc_easy.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -71,7 +72,12 @@ static TX_THREAD app_ota_confirm_thread;
 static TX_THREAD app_ui_thread;
 static TX_THREAD app_tick_thread;
 static UCHAR app_rs485_thread_stack[2048];
-static UCHAR app_rs485_server_thread_stack[2048];
+/*
+ * The Modbus server owns the signed OTA call chain. BEGIN performs external
+ * slot erase and FINISH performs SHA-256/ECDSA verification, so the former
+ * 2 KiB stack can overflow even though ordinary RTU requests are shallow.
+ */
+static UCHAR app_rs485_server_thread_stack[8192];
 static UCHAR app_blackbox_thread_stack[4096];
 static UCHAR app_self_test_thread_stack[2048];
 static UCHAR app_power_thread_stack[3072];
@@ -89,14 +95,14 @@ static UCHAR app_ui_thread_stack[6144];
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN PFP */
-/** @brief Optional low-priority tick task retained for development diagnostics. */
-void app_tick_task_entry(ULONG thread_input)
+/** @brief Advance application-owned LDC timeout state in task context. */
+static void app_tick_task_entry(ULONG thread_input)
 {
     (void)thread_input;
     for(;;)
     {
-//        HAL_GPIO_TogglePin(LED_R_GPIO_Port,LED_R_Pin);
-        tx_thread_sleep(1);;
+        ldc_easy_tick_all(1U);
+        tx_thread_sleep(1U);
     }
 }
 
@@ -208,14 +214,14 @@ UINT App_ThreadX_Init(VOID *memory_ptr)
   /* USER CODE BEGIN App_ThreadX_Init */
   (void)tx_thread_stack_error_notify(app_threadx_stack_error_handler);
   app_health_init();
-//	  if(tx_thread_create(&app_tick_thread, "timer tick",
-//                      app_tick_task_entry, 0U,
-//                      app_tick_thread_stack, sizeof(app_tick_thread_stack),
-//                      1U, 1U,
-//                      TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
-//  {
-//    return TX_THREAD_ERROR;
-//  }
+  if(tx_thread_create(&app_tick_thread, "LDC timeout tick",
+                      app_tick_task_entry, 0U,
+                      app_tick_thread_stack, sizeof(app_tick_thread_stack),
+                      10U, 10U,
+                      TX_NO_TIME_SLICE, TX_AUTO_START) != TX_SUCCESS)
+  {
+    return TX_THREAD_ERROR;
+  }
 
 
 

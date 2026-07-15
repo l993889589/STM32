@@ -8,6 +8,11 @@
 #include "ota_sha256.h"
 #include <string.h>
 
+#define OTA_FIRMWARE_UPDATE_CHECKPOINT_MAGIC   0x43504B54UL /* CPKT */
+#define OTA_FIRMWARE_UPDATE_CHECKPOINT_MAGIC_INDEX    0U
+#define OTA_FIRMWARE_UPDATE_CHECKPOINT_SIZE_INDEX     1U
+#define OTA_FIRMWARE_UPDATE_CHECKPOINT_INVERSE_INDEX  2U
+
 static uint32_t ota_firmware_update_crc32(uint32_t crc, const uint8_t *data, uint32_t size)
 {
     crc = ~crc;
@@ -48,6 +53,59 @@ static uint8_t ota_firmware_update_descriptor_is_valid(
             (descriptor->entry_address & 1U) != 0U) ? 1U : 0U;
 }
 
+static void ota_firmware_update_clear_checkpoint(
+    ota_boot_control_record_t *control)
+{
+    memset(control->reserved, 0, sizeof(control->reserved));
+}
+
+static void ota_firmware_update_set_checkpoint(
+    ota_boot_control_record_t *control,
+    uint32_t received_size)
+{
+    control->reserved[OTA_FIRMWARE_UPDATE_CHECKPOINT_MAGIC_INDEX] =
+        OTA_FIRMWARE_UPDATE_CHECKPOINT_MAGIC;
+    control->reserved[OTA_FIRMWARE_UPDATE_CHECKPOINT_SIZE_INDEX] =
+        received_size;
+    control->reserved[OTA_FIRMWARE_UPDATE_CHECKPOINT_INVERSE_INDEX] =
+        ~received_size;
+}
+
+static uint8_t ota_firmware_update_get_checkpoint(
+    const ota_boot_control_record_t *control,
+    uint32_t *received_size)
+{
+    uint32_t value;
+
+    if(control->reserved[OTA_FIRMWARE_UPDATE_CHECKPOINT_MAGIC_INDEX] !=
+       OTA_FIRMWARE_UPDATE_CHECKPOINT_MAGIC)
+    {
+        return 0U;
+    }
+
+    value = control->reserved[OTA_FIRMWARE_UPDATE_CHECKPOINT_SIZE_INDEX];
+    if(control->reserved[OTA_FIRMWARE_UPDATE_CHECKPOINT_INVERSE_INDEX] !=
+           ~value ||
+       control->pending_slot > (uint32_t)OTA_FIRMWARE_SLOT_B ||
+       value > control->slots[control->pending_slot].image_size)
+    {
+        return 0U;
+    }
+
+    *received_size = value;
+    return 1U;
+}
+
+static uint8_t ota_firmware_update_descriptor_matches(
+    const ota_firmware_descriptor_t *stored,
+    const ota_firmware_descriptor_t *requested)
+{
+    ota_firmware_descriptor_t expected = *requested;
+
+    expected.state = (uint32_t)OTA_SLOT_STATE_DOWNLOADING;
+    return (memcmp(stored, &expected, sizeof(expected)) == 0) ? 1U : 0U;
+}
+
 static ota_boot_control_storage_t ota_firmware_update_control_storage(
     ota_firmware_update_t *update)
 {
@@ -64,6 +122,20 @@ static uint32_t ota_firmware_update_slot_address(uint32_t slot)
 {
     return (slot == (uint32_t)OTA_FIRMWARE_SLOT_A) ?
            OTA_EXT_FIRMWARE_SLOT_A_ADDR : OTA_EXT_FIRMWARE_SLOT_B_ADDR;
+}
+
+static void ota_firmware_update_bind_transaction(
+    ota_firmware_update_t *update,
+    uint32_t target_slot,
+    const ota_firmware_descriptor_t *descriptor,
+    uint32_t received_size)
+{
+    update->target_slot = target_slot;
+    update->target_address = ota_firmware_update_slot_address(target_slot);
+    update->expected_size = descriptor->image_size;
+    update->expected_crc32 = descriptor->image_crc32;
+    update->received_size = received_size;
+    update->last_checkpoint_size = received_size;
 }
 
 static ota_firmware_update_status_t ota_firmware_update_store_control(
@@ -175,6 +247,7 @@ static ota_firmware_update_status_t ota_firmware_update_begin_internal(
     uint8_t recovery_mode)
 {
     ota_firmware_update_status_t status;
+    uint32_t checkpoint_size;
     uint32_t target_slot;
 
     if(update == NULL || !ota_firmware_update_descriptor_is_valid(descriptor))
@@ -184,6 +257,13 @@ static ota_firmware_update_status_t ota_firmware_update_begin_internal(
 
     if(update->is_active != 0U)
     {
+        /* A lost BEGIN reply must be recoverable without erasing again. */
+        if(update->target_slot <= (uint32_t)OTA_FIRMWARE_SLOT_B &&
+           ota_firmware_update_descriptor_matches(
+               &update->control.slots[update->target_slot], descriptor) != 0U)
+        {
+            return OTA_FIRMWARE_UPDATE_OK;
+        }
         return OTA_FIRMWARE_UPDATE_BUSY;
     }
 
@@ -229,12 +309,59 @@ static ota_firmware_update_status_t ota_firmware_update_begin_internal(
         return OTA_FIRMWARE_UPDATE_NOT_PROVISIONED;
     }
 
+    if(update->control.state == (uint32_t)OTA_CONTROL_STATE_DOWNLOADING &&
+       update->control.pending_slot <= (uint32_t)OTA_FIRMWARE_SLOT_B &&
+       ota_firmware_update_descriptor_matches(
+           &update->control.slots[update->control.pending_slot], descriptor) != 0U &&
+       ota_firmware_update_get_checkpoint(&update->control,
+                                           &checkpoint_size) != 0U)
+    {
+        update->abort_state =
+            (update->control.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_NONE) ?
+            (uint32_t)OTA_CONTROL_STATE_RECOVERY :
+            (uint32_t)OTA_CONTROL_STATE_CONFIRMED;
+        ota_firmware_update_bind_transaction(update,
+                                             update->control.pending_slot,
+                                             descriptor,
+                                             checkpoint_size);
+        update->is_active = 1U;
+        return OTA_FIRMWARE_UPDATE_OK;
+    }
+
+    /* Invalidate an older partial package before its target slot is erased. */
+    if(update->control.state == (uint32_t)OTA_CONTROL_STATE_DOWNLOADING ||
+       update->control.state == (uint32_t)OTA_CONTROL_STATE_VERIFIED)
+    {
+        if(update->control.pending_slot <= (uint32_t)OTA_FIRMWARE_SLOT_B)
+        {
+            update->control.slots[update->control.pending_slot].state =
+                (uint32_t)OTA_SLOT_STATE_REJECTED;
+        }
+        update->control.pending_slot = (uint32_t)OTA_FIRMWARE_SLOT_NONE;
+        update->control.state =
+            (update->control.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_NONE) ?
+            (uint32_t)OTA_CONTROL_STATE_RECOVERY :
+            (uint32_t)OTA_CONTROL_STATE_CONFIRMED;
+        ota_firmware_update_clear_checkpoint(&update->control);
+        status = ota_firmware_update_store_control(update);
+        if(status != OTA_FIRMWARE_UPDATE_OK)
+            return status;
+    }
+
     target_slot = (update->control.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_A) ?
                   (uint32_t)OTA_FIRMWARE_SLOT_B : (uint32_t)OTA_FIRMWARE_SLOT_A;
     update->abort_state = (update->control.state == (uint32_t)OTA_CONTROL_STATE_RECOVERY ||
                            update->control.active_slot == (uint32_t)OTA_FIRMWARE_SLOT_NONE) ?
                           (uint32_t)OTA_CONTROL_STATE_RECOVERY :
                           (uint32_t)OTA_CONTROL_STATE_CONFIRMED;
+
+    ota_firmware_update_bind_transaction(update, target_slot, descriptor, 0U);
+
+    status = ota_firmware_update_erase_target(update);
+    if(status != OTA_FIRMWARE_UPDATE_OK)
+    {
+        return status;
+    }
 
     update->control.state = (uint32_t)OTA_CONTROL_STATE_DOWNLOADING;
     update->control.pending_slot = target_slot;
@@ -243,24 +370,12 @@ static ota_firmware_update_status_t ota_firmware_update_begin_internal(
     update->control.last_error_address = 0U;
     update->control.slots[target_slot] = *descriptor;
     update->control.slots[target_slot].state = (uint32_t)OTA_SLOT_STATE_DOWNLOADING;
+    ota_firmware_update_clear_checkpoint(&update->control);
+    ota_firmware_update_set_checkpoint(&update->control, 0U);
 
     status = ota_firmware_update_store_control(update);
     if(status != OTA_FIRMWARE_UPDATE_OK)
-    {
         return status;
-    }
-
-    update->target_slot = target_slot;
-    update->target_address = ota_firmware_update_slot_address(target_slot);
-    update->expected_size = descriptor->image_size;
-    update->expected_crc32 = descriptor->image_crc32;
-    update->received_size = 0U;
-
-    status = ota_firmware_update_erase_target(update);
-    if(status != OTA_FIRMWARE_UPDATE_OK)
-    {
-        return status;
-    }
 
     update->is_active = 1U;
     return OTA_FIRMWARE_UPDATE_OK;
@@ -336,6 +451,22 @@ ota_firmware_update_status_t ota_firmware_update_write(
     }
 
     update->received_size += size;
+    if(update->received_size == update->expected_size ||
+       (update->received_size - update->last_checkpoint_size) >=
+           OTA_FIRMWARE_UPDATE_CHECKPOINT_BYTES)
+    {
+        uint32_t old_checkpoint = update->last_checkpoint_size;
+
+        ota_firmware_update_set_checkpoint(&update->control,
+                                           update->received_size);
+        if(ota_firmware_update_store_control(update) != OTA_FIRMWARE_UPDATE_OK)
+        {
+            ota_firmware_update_set_checkpoint(&update->control,
+                                               old_checkpoint);
+            return OTA_FIRMWARE_UPDATE_CONTROL_ERROR;
+        }
+        update->last_checkpoint_size = update->received_size;
+    }
     return OTA_FIRMWARE_UPDATE_OK;
 }
 
@@ -402,6 +533,7 @@ ota_firmware_update_status_t ota_firmware_update_finish(ota_firmware_update_t *u
 
     update->control.slots[update->target_slot].state = (uint32_t)OTA_SLOT_STATE_VERIFIED;
     update->control.state = (uint32_t)OTA_CONTROL_STATE_VERIFIED;
+    ota_firmware_update_clear_checkpoint(&update->control);
     status = ota_firmware_update_store_control(update);
     if(status != OTA_FIRMWARE_UPDATE_OK)
     {
@@ -448,6 +580,7 @@ ota_firmware_update_status_t ota_firmware_update_abort(ota_firmware_update_t *up
                              (uint32_t)OTA_CONTROL_STATE_CONFIRMED);
     update->control.last_error = (uint32_t)OTA_CONTROL_ERROR_NONE;
     update->control.last_error_address = 0U;
+    ota_firmware_update_clear_checkpoint(&update->control);
     status = ota_firmware_update_store_control(update);
     if(status == OTA_FIRMWARE_UPDATE_OK)
     {

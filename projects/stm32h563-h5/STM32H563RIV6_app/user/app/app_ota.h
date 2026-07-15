@@ -1,3 +1,8 @@
+/**
+ * @file app_ota.h
+ * @brief ThreadX OTA confirmation task configuration and public entry points.
+ */
+
 #ifndef APP_OTA_H
 #define APP_OTA_H
 

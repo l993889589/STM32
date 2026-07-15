@@ -1,3 +1,8 @@
+/**
+ * @file app_ota.c
+ * @brief App-side OTA trial confirmation and shared control-record handling.
+ */
+
 #include "app_ota.h"
 #include "app_board_io.h"
 #include "app_health.h"
@@ -131,6 +136,47 @@ static uint8_t app_ota_control_write(
     return bsp_flash_write(address, data, size);
 }
 
+typedef enum
+{
+    APP_OTA_TRIAL_STATE_NONE = 0,
+    APP_OTA_TRIAL_STATE_PENDING,
+    APP_OTA_TRIAL_STATE_UNKNOWN
+} app_ota_trial_state_t;
+
+static app_ota_trial_state_t app_ota_get_trial_state(void)
+{
+    ota_boot_control_storage_t storage;
+    ota_boot_control_record_t record;
+    ota_control_copy_t copy;
+    ota_control_status_t status;
+    ota_manifest_t manifest;
+
+    storage.context = NULL;
+    storage.read = app_ota_control_read;
+    storage.erase_sector = app_ota_control_erase;
+    storage.write = app_ota_control_write;
+
+    status = ota_boot_control_storage_load(&storage, &record, &copy);
+    if(status == OTA_CONTROL_STATUS_OK)
+    {
+        return (record.state == (uint32_t)OTA_CONTROL_STATE_TRIAL) ?
+               APP_OTA_TRIAL_STATE_PENDING : APP_OTA_TRIAL_STATE_NONE;
+    }
+
+    if(status != OTA_CONTROL_STATUS_NO_VALID_RECORD)
+    {
+        return APP_OTA_TRIAL_STATE_UNKNOWN;
+    }
+
+    if(!app_ota_manifest_load_active(&manifest))
+    {
+        return APP_OTA_TRIAL_STATE_UNKNOWN;
+    }
+
+    return (manifest.boot_state == OTA_BOOT_STATE_TRIAL_BOOT) ?
+           APP_OTA_TRIAL_STATE_PENDING : APP_OTA_TRIAL_STATE_NONE;
+}
+
 /* Return -1 when no v2 record exists, 0 on failure, and 1 on success. */
 static int app_ota_confirm_v2_trial(void)
 {
@@ -216,8 +262,35 @@ void app_ota_confirm_task_entry(ULONG thread_input)
 {
     ULONG started_at = tx_time_get();
     app_health_status_t health;
+    app_ota_trial_state_t trial_state;
 
     (void)thread_input;
+
+    for(;;)
+    {
+        trial_state = app_ota_get_trial_state();
+        if(trial_state == APP_OTA_TRIAL_STATE_NONE)
+        {
+            app_ota_log("ota confirm: confirmed image, no trial gate\r\n");
+            for(;;)
+                tx_thread_sleep(TX_WAIT_FOREVER);
+        }
+
+        if(trial_state == APP_OTA_TRIAL_STATE_PENDING)
+        {
+            started_at = tx_time_get();
+            break;
+        }
+
+        if((ULONG)(tx_time_get() - started_at) >= APP_OTA_CONFIRM_DEADLINE_TICKS)
+        {
+            app_ota_log("ota confirm: control state unavailable\r\n");
+            tx_thread_sleep(20U);
+            bsp_system_reset();
+        }
+
+        tx_thread_sleep(APP_OTA_HEALTH_POLL_TICKS);
+    }
 
     for(;;)
     {

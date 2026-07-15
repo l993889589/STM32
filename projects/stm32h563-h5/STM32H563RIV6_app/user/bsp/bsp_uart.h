@@ -82,6 +82,17 @@ int bsp_uart_start_rx(bsp_uart_port_t port, uint8_t *buffer, uint16_t length);
 int bsp_uart_start_rx_byte(bsp_uart_port_t port);
 
 /**
+ * @brief Reconfigure one initialized UART to a new baud rate and restart RX.
+ * @param port Logical UART role.
+ * @param baud_rate New baud rate in bits per second.
+ * @return Zero on success, otherwise -1.
+ */
+int bsp_uart_set_baud_rate(bsp_uart_port_t port, uint32_t baud_rate);
+
+/** @brief Return the configured baud rate, or zero for an invalid role. */
+uint32_t bsp_uart_get_baud_rate(bsp_uart_port_t port);
+
+/**
  * @brief Transmit bytes with a bounded blocking timeout.
  * @param port Logical UART role.
  * @param data Transmit buffer valid until the call returns.

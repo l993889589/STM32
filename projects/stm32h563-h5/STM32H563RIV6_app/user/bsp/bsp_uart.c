@@ -92,6 +92,10 @@ int bsp_uart_hw_start_rx(bsp_uart_hw_context_t *context, uint8_t *buffer, uint16
  */
 int bsp_uart_hw_start_rx_byte(bsp_uart_hw_context_t *context);
 
+/** @brief Reinitialize one context at a new baud and restore its RX owner. */
+int bsp_uart_hw_set_baud_rate(bsp_uart_hw_context_t *context,
+                              uint32_t baud_rate);
+
 /**
  * @brief Transmit bytes with a bounded timeout.
  * @param context Initialized UART context.
@@ -427,6 +431,41 @@ int bsp_uart_start_rx_byte(bsp_uart_port_t port)
     return bsp_uart_hw_start_rx_byte(bsp_uart_get_context(port));
 }
 
+/** @brief Reconfigure a board UART while preserving its callback and RX buffer. */
+int bsp_uart_set_baud_rate(bsp_uart_port_t port, uint32_t baud_rate)
+{
+    const bsp_uart_binding_t *binding;
+    int status;
+
+    if(port >= BSP_UART_COUNT || baud_rate == 0U)
+        return -1;
+
+    binding = &g_bsp_uart_bindings[port];
+    HAL_NVIC_DisableIRQ(binding->uart_irq);
+    if(binding->rx_dma_instance != NULL)
+        HAL_NVIC_DisableIRQ(binding->rx_dma_irq);
+
+    status = bsp_uart_hw_set_baud_rate(bsp_uart_get_context(port), baud_rate);
+
+    HAL_NVIC_ClearPendingIRQ(binding->uart_irq);
+    HAL_NVIC_EnableIRQ(binding->uart_irq);
+    if(binding->rx_dma_instance != NULL)
+    {
+        HAL_NVIC_ClearPendingIRQ(binding->rx_dma_irq);
+        HAL_NVIC_EnableIRQ(binding->rx_dma_irq);
+    }
+    return status;
+}
+
+/** @brief Return the active baud from the context-owned HAL handle. */
+uint32_t bsp_uart_get_baud_rate(bsp_uart_port_t port)
+{
+    bsp_uart_hw_context_t *context = bsp_uart_get_context(port);
+
+    return (context != NULL && context->is_initialized != 0U) ?
+           context->handle.Init.BaudRate : 0U;
+}
+
 /** @brief Arm the board-selected UART role as a Stop wake source. */
 int bsp_uart_prepare_stop_wakeup(bsp_uart_port_t port)
 {
@@ -717,6 +756,38 @@ int bsp_uart_hw_start_rx_byte(bsp_uart_hw_context_t *context)
     context->rx_size = 1U;
     context->rx_byte_mode = 1U;
     return bsp_uart_hw_restart_rx(context);
+}
+
+/** @brief Reinitialize one UART baud rate and restore its active RX operation. */
+int bsp_uart_hw_set_baud_rate(bsp_uart_hw_context_t *context,
+                              uint32_t baud_rate)
+{
+    uint8_t restart_receive;
+
+    if(context == NULL || context->is_initialized == 0U || baud_rate == 0U)
+        return -1;
+
+    if(context->handle.Init.BaudRate == baud_rate)
+        return 0;
+
+    restart_receive = (context->rx_buffer != NULL && context->rx_size != 0U) ? 1U : 0U;
+    (void)HAL_UART_AbortReceive(&context->handle);
+    context->handle.Init.BaudRate = baud_rate;
+
+    if(HAL_UART_Init(&context->handle) != HAL_OK ||
+       HAL_UARTEx_SetTxFifoThreshold(&context->handle,
+                                    UART_TXFIFO_THRESHOLD_1_8) != HAL_OK ||
+       HAL_UARTEx_SetRxFifoThreshold(&context->handle,
+                                    UART_RXFIFO_THRESHOLD_1_8) != HAL_OK ||
+       HAL_UARTEx_DisableFifoMode(&context->handle) != HAL_OK)
+    {
+        return -1;
+    }
+
+    __HAL_UART_CLEAR_FLAG(&context->handle,
+                          UART_CLEAR_PEF | UART_CLEAR_FEF |
+                          UART_CLEAR_NEF | UART_CLEAR_OREF | UART_CLEAR_TCF);
+    return (restart_receive != 0U) ? bsp_uart_hw_restart_rx(context) : 0;
 }
 
 /** @brief Implement bounded blocking transmit for one UART context. */

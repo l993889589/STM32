@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #define OTA_FIRMWARE_UPDATE_VERIFY_BUFFER_SIZE  256U
+#define OTA_FIRMWARE_UPDATE_CHECKPOINT_BYTES  65536U
 
 typedef enum
 {
@@ -48,6 +49,7 @@ typedef struct
     uint32_t expected_crc32;
     uint32_t target_slot;
     uint32_t abort_state;
+    uint32_t last_checkpoint_size;
     uint8_t verify_buffer[OTA_FIRMWARE_UPDATE_VERIFY_BUFFER_SIZE];
     uint8_t is_active;
 } ota_firmware_update_t;

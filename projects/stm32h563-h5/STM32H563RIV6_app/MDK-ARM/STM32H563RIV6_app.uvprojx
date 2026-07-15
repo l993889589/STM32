@@ -600,6 +600,16 @@
               <FilePath>..\user\bsp\bsp_status.h</FilePath>
             </File>
             <File>
+              <FileName>bsp_stop.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\bsp\bsp_stop.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_stop.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\bsp\bsp_stop.h</FilePath>
+            </File>
+            <File>
               <FileName>bsp_timebase.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\user\bsp\bsp_timebase.c</FilePath>
@@ -755,6 +765,16 @@
               <FilePath>..\user\app\app_rs485.h</FilePath>
             </File>
             <File>
+              <FileName>app_modbus_ota_slave.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\user\app\app_modbus_ota_slave.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_modbus_ota_slave.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\user\app\app_modbus_ota_slave.h</FilePath>
+            </File>
+            <File>
               <FileName>app_modbus_types.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\user\app\app_modbus_types.h</FilePath>
@@ -868,6 +888,16 @@
               <FileName>ota_firmware_update.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Middlewares\ota\ota_firmware_update.h</FilePath>
+            </File>
+            <File>
+              <FileName>ota_modbus_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Middlewares\ota\ota_modbus_protocol.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_modbus_protocol.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Middlewares\ota\ota_modbus_protocol.h</FilePath>
             </File>
             <File>
               <FileName>ota_sha256.c</FileName>

@@ -1,13 +1,13 @@
 /**
  * @file app_rs485.c
- * @brief Dual RS-485 Modbus RTU master service backed by ld_modbus.
+ * @brief RS-485 Modbus service backed by ld_modbus and LDC framing.
  *
  * The public app_rs485_* names are kept so the existing ThreadX and board
  * status code can continue to call this module. Internally the service owns
- * two independent Modbus master ports:
+ * two independent physical ports:
  *
- * - port 0: USART2, BSP_UART_RS485_1
- * - port 1: UART4,  BSP_UART_RS485_2
+ * - port 0: USART2, gateway-facing Modbus/OTA slave
+ * - port 1: UART4,  optional Modbus master
  */
 #include "app_rs485.h"
 
@@ -18,6 +18,7 @@
 
 #include "bsp.h"
 #include "app_health.h"
+#include "app_modbus_ota_slave.h"
 #include "app_power.h"
 #include "bsp_irq_lock.h"
 #include "ld_modbus.h"
@@ -25,6 +26,7 @@
 #include "ld_modbus_server.h"
 #include "ldc_easy.h"
 #include "ldc_port_irq.h"
+#include "ota_modbus_protocol.h"
 
 #ifndef TX_TIMER_TICKS_PER_SECOND
 #define TX_TIMER_TICKS_PER_SECOND 1000U
@@ -56,7 +58,7 @@
 #define APP_MB_ERROR_CRC                        4U
 #define APP_MB_ERROR_RESPONSE                   5U
 #define APP_MB_ERROR_EXCEPTION                  6U
-#define APP_RS485_SERVER_PORT_INDEX              1U
+#define APP_RS485_SERVER_PORT_INDEX              0U
 #define APP_RS485_SERVER_HOLDING_COUNT          32U
 #define APP_RS485_SERVER_INPUT_COUNT            16U
 #define APP_RS485_LOOPBACK_SIGNATURE        0x0563U
@@ -125,7 +127,7 @@ static app_mb_port_t g_ports[APP_MB_PORT_COUNT] =
 
 static app_mb_port_config_t g_port_config[APP_MB_PORT_COUNT] =
 {
-    {1U, APP_RS485_UART_BAUDRATE, APP_MODBUS_MASTER_RESPONSE_MS, APP_MODBUS_MASTER_GAP_MS},
+    {0U, APP_RS485_UART_BAUDRATE, APP_MODBUS_MASTER_RESPONSE_MS, APP_MODBUS_MASTER_GAP_MS},
     {0U, APP_RS485_UART_BAUDRATE, APP_MODBUS_MASTER_RESPONSE_MS, APP_MODBUS_MASTER_GAP_MS},
 };
 
@@ -160,6 +162,55 @@ static void app_rs485_clear_rx_signal(app_mb_port_t *port)
     while(tx_semaphore_get(&port->rx_sem, TX_NO_WAIT) == TX_SUCCESS)
     {
     }
+}
+
+/** @brief Drop all queued and partial frames before changing line settings. */
+static void app_rs485_discard_rx(app_mb_port_t *port)
+{
+    uint8_t frame[APP_MB_FRAME_MAX];
+
+    if(port == NULL)
+        return;
+
+    (void)ldc_easy_abort(&port->ldc);
+    while(ldc_easy_pop(&port->ldc, frame, sizeof(frame)) > 0)
+    {
+    }
+    app_rs485_clear_rx_signal(port);
+    port->last_accounted_us = app_rs485_now_us();
+}
+
+/** @brief Execute an OTA action only after the response left USART2. */
+static void app_rs485_apply_ota_action(
+    app_mb_port_t *port,
+    const app_modbus_ota_slave_action_t *action)
+{
+    int status;
+
+    if(port == NULL || action == NULL)
+        return;
+
+    if(action->delay_ms != 0U)
+        tx_thread_sleep((ULONG)(((uint64_t)action->delay_ms *
+                                 TX_TIMER_TICKS_PER_SECOND + 999ULL) /
+                                1000ULL));
+
+    if(action->change_baud != 0U)
+    {
+        app_rs485_discard_rx(port);
+        status = bsp_uart_set_baud_rate(port->uart, action->baud_rate);
+        app_rs485_discard_rx(port);
+        app_modbus_ota_slave_baud_changed(action->baud_rate,
+                                          (status == 0) ? 1U : 0U);
+        if(status == 0)
+            g_port_config[APP_RS485_SERVER_PORT_INDEX].baudrate =
+                action->baud_rate;
+        else
+            port->stats.transport_errors++;
+    }
+
+    if(action->reset_target != 0U)
+        bsp_system_reset();
 }
 
 /** @brief Advance LDC framing time using elapsed microseconds. */
@@ -574,21 +625,82 @@ UINT app_rs485_init(void)
         port->initialized = 1U;
     }
 
+    if(app_modbus_ota_slave_init(
+           bsp_uart_get_baud_rate(g_ports[APP_RS485_SERVER_PORT_INDEX].uart)) != 0)
+    {
+        return TX_START_ERROR;
+    }
+
     return TX_SUCCESS;
 }
 
-/** @brief Process one UART4 RTU request and emit a bounded server response. */
+/** @brief Process one USART2 RTU request and emit a bounded server response. */
 static void app_rs485_server_process_frame(app_mb_port_t *port,
                                            const uint8_t *request,
                                            uint16_t request_length)
 {
     uint8_t response[APP_MB_FRAME_MAX];
+    uint8_t response_pdu[OTA_MODBUS_MAX_PDU_SIZE];
     size_t response_length = 0U;
+    size_t response_pdu_length = 0U;
     ld_modbus_server_action_t action = LD_MODBUS_SERVER_ACTION_IGNORED;
     ld_modbus_status_t status;
+    ld_modbus_adu_view_t request_view;
+    app_modbus_ota_slave_action_t ota_action;
     bsp_irq_state_t irq_state;
+    uint8_t ota_handled;
 
     port->stats.rx_frames++;
+    status = ld_modbus_rtu_decode(request, request_length, &request_view);
+    if(status != LD_MODBUS_STATUS_OK)
+    {
+        if(status == LD_MODBUS_STATUS_BAD_CRC)
+            port->stats.crc_errors++;
+        else
+            port->stats.ignored_frames++;
+        return;
+    }
+    if(request_view.unit_id != APP_RS485_MODBUS_UNIT_ID)
+    {
+        port->stats.ignored_frames++;
+        return;
+    }
+
+    ota_handled = app_modbus_ota_slave_process(request_view.pdu,
+                                               request_view.pdu_length,
+                                               response_pdu,
+                                               sizeof(response_pdu),
+                                               &response_pdu_length,
+                                               &ota_action);
+    if(ota_handled != 0U)
+    {
+        if(response_pdu_length == 0U ||
+           ld_modbus_rtu_encode(APP_RS485_MODBUS_UNIT_ID,
+                                response_pdu,
+                                response_pdu_length,
+                                response,
+                                sizeof(response),
+                                &response_length) != LD_MODBUS_STATUS_OK)
+        {
+            port->stats.ignored_frames++;
+            return;
+        }
+        if(bsp_uart_write_wait_complete(port->uart,
+                                        response,
+                                        (uint16_t)response_length,
+                                        APP_RS485_TX_TIMEOUT_MS) !=
+           (int)response_length)
+        {
+            port->stats.transport_errors++;
+            if(ota_action.change_baud != 0U)
+                app_modbus_ota_slave_baud_changed(ota_action.baud_rate, 0U);
+            return;
+        }
+        port->stats.tx_frames++;
+        app_rs485_apply_ota_action(port, &ota_action);
+        return;
+    }
+
     g_server_holding[1]++;
     g_server_inputs[1] = g_server_holding[1];
     status = ld_modbus_server_process_rtu_adu(&g_server_map,
@@ -641,10 +753,11 @@ static void app_rs485_server_process_frame(app_mb_port_t *port,
     bsp_irq_unlock(irq_state);
 }
 
-/** @brief Run the UART4 server so it can reply while the master task waits. */
+/** @brief Run the gateway-facing USART2 Modbus and OTA slave. */
 void app_rs485_server_task_entry(ULONG thread_input)
 {
     app_mb_port_t *port = &g_ports[APP_RS485_SERVER_PORT_INDEX];
+    app_modbus_ota_slave_action_t ota_action;
     uint8_t request[APP_MB_FRAME_MAX];
     int request_length;
 
@@ -662,6 +775,8 @@ void app_rs485_server_task_entry(ULONG thread_input)
                                            (uint16_t)request_length);
             app_power_wake_lock_release(APP_POWER_OWNER_RS485);
         }
+        if(app_modbus_ota_slave_poll(&ota_action) != 0U)
+            app_rs485_apply_ota_action(port, &ota_action);
         (void)tx_semaphore_get(&port->rx_sem, 2U);
     }
 }
@@ -699,6 +814,7 @@ void app_rs485_task_entry(ULONG thread_input)
             device = &g_devices[poll->device_index];
             if(!device->enabled ||
                (device->port_id >= APP_MB_PORT_COUNT) ||
+               (device->port_id == APP_RS485_SERVER_PORT_INDEX) ||
                !g_port_config[device->port_id].enabled)
                 continue;
 
