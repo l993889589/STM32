@@ -7,6 +7,11 @@ static void cpu_cache_enable(void);
 
 void system_init(void)
 {
+#if defined(ART_PI_QSPI_APP)
+    SCB->VTOR = BSP_QSPI_W25Q128_BASE_ADDRESS;
+    __DSB();
+    __ISB();
+#endif
     mpu_config();
     cpu_cache_enable();
 
@@ -173,6 +178,20 @@ static void mpu_config(void)
     region.Number = MPU_REGION_NUMBER1;
     region.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
     HAL_MPU_ConfigRegion(&region);
+
+#if defined(ART_PI_QSPI_APP)
+    region.BaseAddress = BSP_QSPI_W25Q128_BASE_ADDRESS;
+    region.Size = MPU_REGION_SIZE_8MB;
+    region.AccessPermission = MPU_REGION_FULL_ACCESS;
+    region.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+    region.IsCacheable = MPU_ACCESS_CACHEABLE;
+    region.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+    region.Number = MPU_REGION_NUMBER2;
+    region.TypeExtField = MPU_TEX_LEVEL0;
+    region.SubRegionDisable = 0x00U;
+    region.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+    HAL_MPU_ConfigRegion(&region);
+#endif
 
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 }

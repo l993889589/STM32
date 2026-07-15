@@ -66,6 +66,9 @@ HAL_StatusTypeDef bsp_uart_receive_start(bsp_uart_port_t port,
                                          bsp_uart_rx_callback_t callback,
                                          void *argument);
 HAL_StatusTypeDef bsp_uart_receive_stop(bsp_uart_port_t port);
+HAL_StatusTypeDef bsp_uart_set_baud_rate(bsp_uart_port_t port,
+                                          uint32_t baud_rate);
+uint32_t bsp_uart_get_baud_rate(bsp_uart_port_t port);
 HAL_StatusTypeDef bsp_uart_set_tx_callbacks(bsp_uart_port_t port,
                                              bsp_uart_tx_callback_t send_before,
                                              bsp_uart_tx_callback_t send_complete,

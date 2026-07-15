@@ -24,6 +24,11 @@ LR_IROM1 0x08000000 0x00020000
         app_netx_services.o (.bss.netx)
     }
 
+    RW_HTTP 0x24012800 UNINIT 0x00006000
+    {
+        app_netx_services.o (.bss.http)
+    }
+
     RW_ETH_DMA 0x30040000 UNINIT 0x00008000
     {
         bsp_eth.o (.bss.eth_dma)

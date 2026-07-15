@@ -341,7 +341,7 @@
               <MiscControls>-Wno-invalid-source-encoding</MiscControls>
               <Define>USE_HAL_DRIVER,STM32H750xx,TX_ENABLE_FPU_SUPPORT,TX_INCLUDE_USER_DEFINE_FILE,NX_INCLUDE_USER_DEFINE_FILE</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\ldc;..\..\ld_modbus\include;..\..\ld_modbus\integrations\ldc;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc;..\..\NetXDuo\ports\cortex_m7\ac5\inc;..\..\NetXDuo\common\inc;..\..\NetXDuo\addons\dhcp</IncludePath>
+              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\..\art_pi_h750_common\gateway_ota;..\..\ldc;..\..\ld_modbus\include;..\..\ld_modbus\integrations\ldc;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc;..\..\NetXDuo\ports\cortex_m7\ac5\inc;..\..\NetXDuo\common\inc;..\..\NetXDuo\addons\dhcp</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -419,6 +419,71 @@
               <FileName>app_modbus_rtu.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\User\app_modbus_rtu.h</FilePath>
+            </File>
+            <File>
+              <FileName>ota_modbus_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\ota_modbus_protocol.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_modbus_protocol.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\ota_modbus_protocol.h</FilePath>
+            </File>
+            <File>
+              <FileName>app_h563_ota_cache.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_h563_ota_cache.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_h563_ota_cache.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_h563_ota_cache.h</FilePath>
+            </File>
+            <File>
+              <FileName>app_h563_ota_master.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_h563_ota_master.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_gateway_boot.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_gateway_boot.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_gateway_boot.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_gateway_boot.h</FilePath>
+            </File>
+            <File>
+              <FileName>app_gateway_ota.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\app_gateway_ota.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_gateway_ota.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_gateway_ota.h</FilePath>
+            </File>
+            <File>
+              <FileName>gateway_ota_format.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\art_pi_h750_common\gateway_ota\gateway_ota_format.h</FilePath>
+            </File>
+            <File>
+              <FileName>ota_sha256.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\art_pi_h750_common\gateway_ota\ota_sha256.c</FilePath>
+            </File>
+            <File>
+              <FileName>ota_sha256.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\..\art_pi_h750_common\gateway_ota\ota_sha256.h</FilePath>
+            </File>
+            <File>
+              <FileName>app_h563_ota_master.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\app_h563_ota_master.h</FilePath>
             </File>
             <File>
               <FileName>app_netx.c</FileName>
@@ -606,6 +671,16 @@
               <FilePath>..\..\User\bsp\inc\bsp_w25q128.h</FilePath>
             </File>
             <File>
+              <FileName>bsp_qspi_w25q128.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\User\bsp\src\bsp_qspi_w25q128.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_qspi_w25q128.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\User\bsp\inc\bsp_qspi_w25q128.h</FilePath>
+            </File>
+            <File>
               <FileName>bsp_flash_layout.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\User\bsp\inc\bsp_flash_layout.h</FilePath>
@@ -784,6 +859,11 @@
               <FileName>stm32h7xx_hal_spi.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\Libraries\STM32H7xx_HAL_Driver\Src\stm32h7xx_hal_spi.c</FilePath>
+            </File>
+            <File>
+              <FileName>stm32h7xx_hal_qspi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Libraries\STM32H7xx_HAL_Driver\Src\stm32h7xx_hal_qspi.c</FilePath>
             </File>
             <File>
               <FileName>stm32h7xx_hal_eth.c</FileName>

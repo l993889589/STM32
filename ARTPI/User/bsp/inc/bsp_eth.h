@@ -21,6 +21,10 @@ typedef struct
     uint32_t receive_errors;
     uint32_t transmit_errors;
     uint32_t dma_errors;
+    uint32_t transmit_timeouts;
+    uint32_t transmit_recoveries;
+    uint32_t last_hal_error;
+    uint32_t last_dma_status;
 } bsp_eth_diagnostics_t;
 
 typedef void (*bsp_eth_rx_callback_t)(void *argument);

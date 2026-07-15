@@ -8,6 +8,7 @@
 #include "bsp_eth.h"
 #include "bsp_flash_layout.h"
 #include "bsp_led.h"
+#include "bsp_qspi_w25q128.h"
 #include "bsp_rs485.h"
 #include "bsp_sdio_wifi.h"
 #include "bsp_spi_bus.h"

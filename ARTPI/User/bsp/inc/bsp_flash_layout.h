@@ -26,7 +26,10 @@
      BSP_W25Q128_SECTOR_SIZE)
 #define BSP_FLASH_CONFIG_SLOT_SIZE             BSP_W25Q128_SECTOR_SIZE
 
-#define BSP_FLASH_FILESYSTEM_ADDRESS          0x400000UL
+#define BSP_FLASH_GATEWAY_OTA_ADDRESS         0x400000UL
+#define BSP_FLASH_GATEWAY_OTA_SIZE            (2UL * 1024UL * 1024UL)
+
+#define BSP_FLASH_FILESYSTEM_ADDRESS          0x600000UL
 
 /*
  * The official Resource_16MB.bin leaves the final 4 KiB sector erased.
@@ -55,13 +58,18 @@
 #endif
 
 #if ((BSP_FLASH_EASYFLASH_ADDRESS + BSP_FLASH_EASYFLASH_SIZE) != \
-     BSP_FLASH_FILESYSTEM_ADDRESS)
-#error "ART-Pi EasyFlash and filesystem partitions are not contiguous"
+     BSP_FLASH_GATEWAY_OTA_ADDRESS)
+#error "ART-Pi EasyFlash and gateway OTA partitions are not contiguous"
 #endif
 
 #if ((BSP_FLASH_CONFIG_SLOT_B_ADDRESS + BSP_FLASH_CONFIG_SLOT_SIZE) != \
-     BSP_FLASH_FILESYSTEM_ADDRESS)
+     BSP_FLASH_GATEWAY_OTA_ADDRESS)
 #error "ART-Pi configuration slots must end at the EasyFlash boundary"
+#endif
+
+#if ((BSP_FLASH_GATEWAY_OTA_ADDRESS + BSP_FLASH_GATEWAY_OTA_SIZE) != \
+     BSP_FLASH_FILESYSTEM_ADDRESS)
+#error "ART-Pi gateway OTA and filesystem partitions are not contiguous"
 #endif
 
 #if ((BSP_FLASH_DIAGNOSTIC_ADDRESS + BSP_FLASH_DIAGNOSTIC_SIZE) != \
