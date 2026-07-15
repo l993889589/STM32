@@ -103,6 +103,22 @@ ApplicationWindow {
         }
     }
 
+    function configDeviceSnapshot(index) {
+        var device = configDeviceModel.get(index)
+        return {
+            "unitId": Number(device.unitId),
+            "timeoutMs": Number(device.timeoutMs),
+            "coilAddress": Number(device.coilAddress),
+            "coilQuantity": Number(device.coilQuantity),
+            "discreteAddress": Number(device.discreteAddress),
+            "discreteQuantity": Number(device.discreteQuantity),
+            "holdingAddress": Number(device.holdingAddress),
+            "holdingQuantity": Number(device.holdingQuantity),
+            "inputAddress": Number(device.inputAddress),
+            "inputQuantity": Number(device.inputQuantity)
+        }
+    }
+
     function addConfigDevice() {
         var nextCount = Math.min(10, Number(deviceCountSpin.value) + 1)
         if (nextCount === Number(deviceCountSpin.value)) {
@@ -1138,7 +1154,7 @@ ApplicationWindow {
                     onClicked: {
                         var devices = []
                         for (var i = 0; i < configDeviceModel.count; ++i)
-                            devices.push(configDeviceModel.get(i))
+                            devices.push(window.configDeviceSnapshot(i))
                         gateway.saveConfiguration({
                             "rs485Role": roleCombo.currentIndex,
                             "modbusUnitId": unitIdSpin.value,

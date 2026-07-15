@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJSValue>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSettings>
@@ -15,6 +16,15 @@ namespace
 {
 constexpr int kRequestTimeoutMs = 4000;
 constexpr int kMaxLogEntries = 200;
+
+QVariantMap deviceVariantToMap(const QVariant &value)
+{
+    if (value.metaType() == QMetaType::fromType<QJSValue>())
+    {
+        return value.value<QJSValue>().toVariant().toMap();
+    }
+    return value.toMap();
+}
 }
 
 ArtPiClient::ArtPiClient(QObject *parent)
@@ -329,7 +339,7 @@ void ArtPiClient::saveConfiguration(const QVariantMap &general,
     const int activeDeviceCount = body.value(QStringLiteral("master_device_count")).toInt();
     for (int index = 0; index < activeDeviceCount; ++index)
     {
-        const QVariantMap device = devices.at(index).toMap();
+        const QVariantMap device = deviceVariantToMap(devices.at(index));
         const QString root = QStringLiteral("d%1_").arg(index);
         body.insert(root + QStringLiteral("unit_id"),
                     deviceField(device, QStringLiteral("unitId"), QStringLiteral("unit_id"), index + 1).toInt());
@@ -730,7 +740,7 @@ QString ArtPiClient::validateConfiguration(const QVariantMap &general,
     };
     for (int index = 0; index < deviceCount; ++index)
     {
-        const QVariantMap device = devices.at(index).toMap();
+        const QVariantMap device = deviceVariantToMap(devices.at(index));
         const int deviceUnitId = deviceField(device,
                                              QStringLiteral("unitId"),
                                              QStringLiteral("unit_id"),

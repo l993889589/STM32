@@ -33,6 +33,7 @@ if (-not $SkipHardware) {
     Invoke-GatewayStudio "--self-test $Endpoint"
     Invoke-GatewayStudio "--integration-test $Endpoint"
 }
+Invoke-GatewayStudio '--payload-self-test'
 Invoke-GatewayStudio '--industrial-self-test'
 
 $capture = Join-Path $project 'build\mqtt_capture.json'

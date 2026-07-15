@@ -4,12 +4,16 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQmlContext>
+#include <QQmlEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QSettings>
@@ -94,6 +98,106 @@ int runSelfTest(int argc, char *argv[])
     });
     client.connectNow();
     return application.exec();
+}
+
+int runPayloadSelfTest(int argc, char *argv[])
+{
+    QCoreApplication application(argc, argv);
+    QQmlEngine engine;
+    QQmlComponent component(&engine);
+    component.setData(R"qml(
+        import QtQml
+        import QtQml.Models
+        QtObject {
+            property ListModel rows: ListModel {
+                ListElement {
+                    unitId: 3
+                    timeoutMs: 200
+                    coilAddress: 0
+                    coilQuantity: 0
+                    discreteAddress: 0
+                    discreteQuantity: 0
+                    holdingAddress: 0
+                    holdingQuantity: 2
+                    inputAddress: 0
+                    inputQuantity: 2
+                }
+            }
+            function firstSnapshot() {
+                var device = rows.get(0)
+                return {
+                    "unitId": Number(device.unitId),
+                    "timeoutMs": Number(device.timeoutMs),
+                    "coilAddress": Number(device.coilAddress),
+                    "coilQuantity": Number(device.coilQuantity),
+                    "discreteAddress": Number(device.discreteAddress),
+                    "discreteQuantity": Number(device.discreteQuantity),
+                    "holdingAddress": Number(device.holdingAddress),
+                    "holdingQuantity": Number(device.holdingQuantity),
+                    "inputAddress": Number(device.inputAddress),
+                    "inputQuantity": Number(device.inputQuantity)
+                }
+            }
+        }
+    )qml", QUrl(QStringLiteral("inmemory:/payload_test.qml")));
+
+    QElapsedTimer loadTimer;
+    loadTimer.start();
+    while (component.isLoading() && loadTimer.elapsed() < 2000)
+    {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    }
+
+    QScopedPointer<QObject> fixture(component.create());
+    if (!fixture)
+    {
+        QFile traceFile(QDir::temp().filePath(QStringLiteral("artpi_gateway_payload_self_test.log")));
+        if (traceFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+        {
+            traceFile.write(component.errorString().toUtf8());
+        }
+        qCritical().noquote() << component.errorString();
+        return 2;
+    }
+
+    QVariant rowSnapshot;
+    if (!QMetaObject::invokeMethod(fixture.data(),
+                                   "firstSnapshot",
+                                   Q_RETURN_ARG(QVariant, rowSnapshot)))
+    {
+        qCritical() << "PAYLOAD-SELF-TEST FAIL could not read ListModel row";
+        return 3;
+    }
+
+    const QVariantMap general{
+        {QStringLiteral("rs485Role"), 1},
+        {QStringLiteral("modbusUnitId"), 5},
+        {QStringLiteral("masterDeviceCount"), 1},
+        {QStringLiteral("offlineProbeSeconds"), 60},
+        {QStringLiteral("pollPeriodMs"), 750},
+        {QStringLiteral("redLedOn"), 0},
+        {QStringLiteral("buzzerOn"), 0}
+    };
+    ArtPiClient client;
+    client.setAutoRefresh(false);
+    client.setEndpoint(QStringLiteral("http://127.0.0.1:1"));
+
+    bool rejected = false;
+    QString rejection;
+    QObject::connect(&client, &ArtPiClient::configurationFailed,
+                     &application, [&](const QString &message) {
+        rejected = true;
+        rejection = message;
+    });
+    client.saveConfiguration(general, QVariantList{rowSnapshot});
+    if (rejected)
+    {
+        qCritical().noquote() << QStringLiteral("PAYLOAD-SELF-TEST FAIL %1").arg(rejection);
+        return 4;
+    }
+
+    qInfo() << "PAYLOAD-SELF-TEST PASS ListModel Unit ID 3 accepted";
+    return 0;
 }
 
 int runIntegrationTest(int argc, char *argv[])
@@ -363,6 +467,10 @@ int main(int argc, char *argv[])
     if (hasArgument(argc, argv, QByteArrayLiteral("--integration-test")))
     {
         return runIntegrationTest(argc, argv);
+    }
+    if (hasArgument(argc, argv, QByteArrayLiteral("--payload-self-test")))
+    {
+        return runPayloadSelfTest(argc, argv);
     }
     if (hasArgument(argc, argv, QByteArrayLiteral("--industrial-self-test")))
     {
