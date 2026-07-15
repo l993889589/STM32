@@ -1,0 +1,17 @@
+.page { padding: 32rpx; }
+.hero { padding: 28rpx 8rpx 36rpx; }
+.title { display: block; font-size: 48rpx; font-weight: 700; }
+.subtitle { display: block; margin-top: 12rpx; color: #637083; }
+.card { margin-bottom: 24rpx; padding: 28rpx; background: #fff; border-radius: 20rpx; box-shadow: 0 8rpx 28rpx rgba(20, 33, 61, .08); }
+.devices { margin-top: 20rpx; }
+.device { display: flex; align-items: center; justify-content: space-between; padding: 22rpx 4rpx; border-bottom: 1rpx solid #edf0f4; }
+.device-name, .device-id { display: block; }
+.device-name { font-weight: 600; }
+.device-id { max-width: 500rpx; margin-top: 6rpx; color: #7a8798; font-size: 22rpx; overflow: hidden; text-overflow: ellipsis; }
+.rssi { color: #637083; font-size: 24rpx; }
+.section-title { display: block; margin-bottom: 20rpx; font-size: 32rpx; font-weight: 650; }
+.input { box-sizing: border-box; width: 100%; height: 88rpx; margin-bottom: 20rpx; padding: 0 24rpx; background: #f4f6f8; border-radius: 12rpx; }
+.status { margin: 24rpx 4rpx 12rpx; padding: 22rpx; border-radius: 12rpx; background: #e9eef5; }
+.status.success { color: #116b3a; background: #dff5e8; }
+.status.error { color: #9d2525; background: #fde6e6; }
+.warning { padding: 8rpx 4rpx; color: #9a6a12; font-size: 24rpx; line-height: 1.5; }

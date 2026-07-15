@@ -1,0 +1,29 @@
+<view class="page">
+  <view class="hero">
+    <text class="title">W800 BLE 配网</text>
+    <text class="subtitle">扫描设备，连接后写入 Wi-Fi 信息</text>
+  </view>
+
+  <view class="card">
+    <button type="primary" loading="{{scanning}}" bindtap="scan">{{scanning ? '扫描中…' : '扫描 W800'}}</button>
+    <view wx:if="{{devices.length}}" class="devices">
+      <view wx:for="{{devices}}" wx:key="deviceId" class="device" data-id="{{item.deviceId}}" bindtap="connect">
+        <view>
+          <text class="device-name">{{item.name || item.localName || '未命名 BLE 设备'}}</text>
+          <text class="device-id">{{item.deviceId}}</text>
+        </view>
+        <text class="rssi">{{item.RSSI}} dBm</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{connected}}">
+    <text class="section-title">Wi-Fi 参数</text>
+    <input class="input" maxlength="32" placeholder="SSID" value="{{ssid}}" bindinput="onSsid" />
+    <input class="input" maxlength="63" password placeholder="密码（开放网络可留空）" value="{{password}}" bindinput="onPassword" />
+    <button type="primary" loading="{{configuring}}" bindtap="configure">写入并连接</button>
+  </view>
+
+  <view class="status {{statusKind}}">{{status}}</view>
+  <view class="warning">当前小程序按官方明文兼容模式发送，请仅在现场近距离配网。</view>
+</view>
