@@ -10,30 +10,70 @@ void system_init(void)
     mpu_config();
     cpu_cache_enable();
 
+    if (bsp_dwt_init() != HAL_OK)
+    {
+        BSP_ERROR();
+    }
+
     HAL_Init();
     system_clock_config();
 }
 
 void bsp_init(void)
 {
-    bsp_uart4_init();
+    if (bsp_tim_init() != HAL_OK)
+    {
+        BSP_ERROR();
+    }
+
+    if (bsp_tim_pwm_init() != HAL_OK)
+    {
+        BSP_ERROR();
+    }
+
+    bsp_uart_init();
+    if (bsp_rs485_init() != HAL_OK)
+    {
+        BSP_ERROR();
+    }
+
+    bsp_beep_init();
     bsp_led_init();
 }
 
 void bsp_delay_ms(uint32_t delay_ms)
 {
-    if (tx_thread_identify() != TX_NULL)
+    if (delay_ms == 0U)
     {
-        (void)tx_thread_sleep((ULONG)delay_ms);
+        return;
+    }
+
+    if ((__get_IPSR() == 0U) && (__get_PRIMASK() == 0U) &&
+        (__get_BASEPRI() == 0U) && (__get_FAULTMASK() == 0U) &&
+        (tx_thread_identify() != TX_NULL))
+    {
+        uint64_t ticks = ((uint64_t)delay_ms * TX_TIMER_TICKS_PER_SECOND + 999U) / 1000U;
+
+        if (ticks == 0U)
+        {
+            ticks = 1U;
+        }
+        while (ticks > (uint64_t)(TX_WAIT_FOREVER - 1UL))
+        {
+            (void)tx_thread_sleep(TX_WAIT_FOREVER - 1UL);
+            ticks -= (uint64_t)(TX_WAIT_FOREVER - 1UL);
+        }
+        (void)tx_thread_sleep((ULONG)ticks);
     }
     else
     {
-        uint32_t start = HAL_GetTick();
-
-        while ((HAL_GetTick() - start) < delay_ms)
-        {
-        }
+        bsp_dwt_delay_ms(delay_ms);
     }
+}
+
+void bsp_delay_us(uint32_t delay_us)
+{
+    bsp_dwt_delay_us(delay_us);
 }
 
 void bsp_error_handler(const char *file, uint32_t line)
@@ -101,6 +141,8 @@ static void system_clock_config(void)
         BSP_ERROR();
     }
 
+    __HAL_RCC_TIMCLKPRESCALER(RCC_TIMPRES_DESACTIVATED);
+
     __HAL_RCC_CSI_ENABLE();
     __HAL_RCC_SYSCFG_CLK_ENABLE();
     HAL_EnableCompensationCell();
@@ -123,6 +165,13 @@ static void mpu_config(void)
     region.TypeExtField = MPU_TEX_LEVEL1;
     region.SubRegionDisable = 0x00U;
     region.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+    HAL_MPU_ConfigRegion(&region);
+
+    region.BaseAddress = 0x30040000U;
+    region.Size = MPU_REGION_SIZE_32KB;
+    region.IsShareable = MPU_ACCESS_SHAREABLE;
+    region.Number = MPU_REGION_NUMBER1;
+    region.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
     HAL_MPU_ConfigRegion(&region);
 
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);

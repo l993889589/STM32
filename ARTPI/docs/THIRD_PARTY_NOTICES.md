@@ -1,22 +1,24 @@
-# Third-Party Notices
+# Third-party software
 
-This starter project includes vendor and RTOS source copied from the supplied H743 demo so the Keil project remains self-contained.
+## Eclipse ThreadX NetX Duo
 
-## Microsoft Azure RTOS ThreadX
+- Upstream: https://github.com/eclipse-threadx/netxduo
+- Version: `v6.1.7_rel`
+- Commit: `c187d60014b149ee7c5e79b4d84c416caddbdef7`
+- Imported paths: `NetXDuo/common`, `NetXDuo/ports/cortex_m7/ac5`, `NetXDuo/addons/dhcp/nxd_dhcp_client.*`
+- License files: `NetXDuo/LICENSE.txt`, `NetXDuo/LICENSED-HARDWARE.txt`
 
-- Location: `ThreadX/`
-- Upstream component: Azure RTOS ThreadX 6.0.1 as supplied by the demo
-- License files: `ThreadX/LICENSE.txt` and `ThreadX/LICENSED-HARDWARE.txt`
+The NetX Duo sources are kept unmodified. Project-specific configuration is
+provided by `User/nx_user.h`; the STM32H750 Ethernet link driver remains in the
+project BSP/application source tree.
 
-## STMicroelectronics CMSIS device support
+## AP6212 WICED Wi-Fi binary
 
-- Location: `Libraries/CMSIS/`
-- Upstream component: STM32H7 CMSIS core and device support as supplied by the demo
-- Copyright and redistribution terms are retained in the individual source and header files.
+- Required local path: `Libraries/AP6212/libwifi_6212_armcm7_2.1.2_armcc.lib`
+- Origin: the official RT-Thread ART-Pi support package / matching AP6212 WICED package
 
-## STMicroelectronics STM32H7 HAL driver
-
-- Location: `Libraries/STM32H7xx_HAL_Driver/`
-- Upstream component: STM32H7 HAL driver as supplied by the demo
-- License file: `Libraries/STM32H7xx_HAL_Driver/License.md`
-
+The prebuilt Wi-Fi library is proprietary vendor material and is intentionally
+not committed to the parent repository. Copy the matching library to the path
+above before building the `Flash` target. The surrounding board integration
+source is published, but the repository does not grant redistribution rights
+for the binary library.
