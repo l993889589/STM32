@@ -30,3 +30,12 @@ This starter project includes vendor and RTOS source copied from the supplied H7
 - License files: `NetXDuo/LICENSE.txt` and `NetXDuo/LICENSED-HARDWARE.txt`
 
 The imported NetX Duo sources are kept unmodified; project-specific configuration is provided by `User/nx_user.h`.
+
+## micro-ecc
+
+- Location: `art_pi_h750_common/gateway_ota/micro_ecc/`
+- Upstream: https://github.com/kmackay/micro-ecc
+- Copyright: Kenneth MacKay
+- License: BSD 2-Clause; see `art_pi_h750_common/gateway_ota/micro_ecc/LICENSE.txt`
+
+The gateway bootloader uses micro-ecc only for secp256r1 firmware-signature verification.

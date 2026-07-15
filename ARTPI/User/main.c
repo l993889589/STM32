@@ -1,6 +1,8 @@
 #include "includes.h"
 #include "app_device_config.h"
 #include "app_flash_check.h"
+#include "app_gateway_boot.h"
+#include "app_gateway_ota.h"
 #include "app_netx.h"
 #include "app_modbus_rtu.h"
 #include "app_wifi.h"
@@ -10,6 +12,7 @@
 
 #define STARTUP_TASK_STACK_SIZE  8192U
 #define LED_TASK_STACK_SIZE      1024U
+#define APP_GATEWAY_IMAGE_VERSION 2026071507UL
 
 static TX_THREAD startup_task_control_block;
 static TX_THREAD led_task_control_block;
@@ -21,6 +24,7 @@ static void startup_task_entry(ULONG thread_input);
 static void led_task_entry(ULONG thread_input);
 static void application_tasks_create(void);
 static void spi_flash_report(void);
+static void qspi_flash_report(void);
 
 int main(void)
 {
@@ -70,6 +74,13 @@ static void startup_task_entry(ULONG thread_input)
                           "INDUSTRY-IO: buzzer PH7 self-test complete\r\n");
 
     spi_flash_report();
+    qspi_flash_report();
+    app_gateway_boot_publish_image(APP_GATEWAY_IMAGE_VERSION);
+    if(app_gateway_ota_init() != HAL_OK)
+    {
+        bsp_uart_write_string(BSP_UART_DEBUG,
+                              "Gateway OTA staging init failed\r\n");
+    }
     (void)app_wifi_start_and_scan();
 
     if (app_netx_start() != NX_SUCCESS)
@@ -86,31 +97,40 @@ static void startup_task_entry(ULONG thread_input)
 
         if (app_modbus_rtu_get_config(&config) != HAL_OK)
         {
-            config.unit_id = APP_MODBUS_RTU_UNIT_ID;
+            app_device_config_set_defaults(&config.persistent);
         }
         (void)snprintf(message,
                        sizeof(message),
                        "Modbus RTU ready: UART5 PB13/TX PB12/RX, PI4 DE, "
-                       "115200 8N1, unit=%u\r\n",
-                       (unsigned int)config.unit_id);
+                       "115200 8N1, role=%s, slave_unit=%u, devices=%u\r\n",
+                       (config.persistent.rs485_role == APP_RS485_ROLE_MASTER) ?
+                           "master" : "slave",
+                       (unsigned int)config.persistent.modbus_unit_id,
+                       (unsigned int)config.persistent.master_device_count);
         bsp_uart_write_string(BSP_UART_DEBUG, message);
         if (app_device_config_get_diagnostics(&storage) == HAL_OK)
         {
             (void)snprintf(message,
                            sizeof(message),
-                           "Config slots: A=%u/unit%u/seq%lu, B=%u/unit%u/seq%lu\r\n",
+                           "Config slots: A=%u/v%u/role%u/unit%u/dev%u/seq%lu, "
+                           "B=%u/v%u/role%u/unit%u/dev%u/seq%lu\r\n",
                            (unsigned int)storage.slot_a_valid,
+                           (unsigned int)storage.slot_a_version,
+                           (unsigned int)storage.slot_a_rs485_role,
                            (unsigned int)storage.slot_a_modbus_unit_id,
+                           (unsigned int)storage.slot_a_master_device_count,
                            (unsigned long)storage.slot_a_sequence,
                            (unsigned int)storage.slot_b_valid,
+                           (unsigned int)storage.slot_b_version,
+                           (unsigned int)storage.slot_b_rs485_role,
                            (unsigned int)storage.slot_b_modbus_unit_id,
+                           (unsigned int)storage.slot_b_master_device_count,
                            (unsigned long)storage.slot_b_sequence);
             bsp_uart_write_string(BSP_UART_DEBUG, message);
         }
         bsp_uart_write_string(BSP_UART_DEBUG,
-                              "Blue LED is the 500 ms heartbeat; coils 0/1 control "
-                              "red LED/buzzer; "
-                              "input registers 0..7 report ID and diagnostics\r\n");
+                              "Blue LED is the 500 ms heartbeat; slave coils 0/1 "
+                              "control red LED/buzzer; HTTP configures RS485 mode\r\n");
     }
     else
     {
@@ -118,10 +138,44 @@ static void startup_task_entry(ULONG thread_input)
                               "Modbus RTU start failed\r\n");
     }
 
+    app_gateway_boot_mark_healthy();
+
     while (1)
     {
         tx_thread_sleep(1000U);
     }
+}
+
+static void qspi_flash_report(void)
+{
+#if defined(ART_PI_QSPI_APP)
+    bsp_uart_write_string(BSP_UART_DEBUG,
+                          "QSPI/W25Q64 XIP active at 0x90000000\r\n");
+#else
+    uint32_t jedec_id = 0U;
+    uint8_t first_bytes[16] = {0};
+    HAL_StatusTypeDef status;
+    char message[192];
+
+    status = bsp_qspi_w25q128_init();
+    if(status == HAL_OK)
+    {
+        status = bsp_qspi_w25q128_read_id(&jedec_id);
+    }
+    if(status == HAL_OK)
+    {
+        status = bsp_qspi_w25q128_read(0U, first_bytes, sizeof(first_bytes));
+    }
+    (void)snprintf(message,
+                   sizeof(message),
+                   "QSPI/W25Q128: status=%u JEDEC=%06lX first=%02X%02X%02X%02X "
+                   "%02X%02X%02X%02X\r\n",
+                   (unsigned int)status,
+                   (unsigned long)jedec_id,
+                   first_bytes[0], first_bytes[1], first_bytes[2], first_bytes[3],
+                   first_bytes[4], first_bytes[5], first_bytes[6], first_bytes[7]);
+    bsp_uart_write_string(BSP_UART_DEBUG, message);
+#endif
 }
 
 static void led_task_entry(ULONG thread_input)

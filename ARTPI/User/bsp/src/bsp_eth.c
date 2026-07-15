@@ -15,7 +15,7 @@
 #define BSP_ETH_PHY_FULL_DUPLEX         0x0010U
 
 #define BSP_ETH_RX_BUFFER_SIZE             1536U
-#define BSP_ETH_TRANSMIT_TIMEOUT_MS          100U
+#define BSP_ETH_TRANSMIT_TIMEOUT_MS          250U
 
 static ETH_HandleTypeDef eth_handle;
 static ETH_TxPacketConfig eth_tx_config;
@@ -163,7 +163,28 @@ HAL_StatusTypeDef bsp_eth_transmit(const uint8_t *frame, uint32_t length)
     }
     else
     {
+        uint32_t hal_error = eth_handle.ErrorCode;
+
         eth_diagnostics.transmit_errors++;
+        eth_diagnostics.last_hal_error = hal_error;
+        eth_diagnostics.last_dma_status = eth_handle.Instance->DMACSR;
+
+        if (((hal_error & HAL_ETH_ERROR_TIMEOUT) != 0U) &&
+            ((hal_error & (HAL_ETH_ERROR_DMA | HAL_ETH_ERROR_MAC)) == 0U) &&
+            (eth_handle.gState == HAL_ETH_STATE_ERROR))
+        {
+            /*
+             * HAL_ETH_Transmit leaves gState in ERROR after one timeout.
+             * The next descriptor submission can wake a transient TBU stall,
+             * but HAL rejects it unless the state is returned to READY.
+             * Do not retry this frame here: NetX owns retransmission policy.
+             */
+            eth_diagnostics.transmit_timeouts++;
+            eth_handle.ErrorCode = HAL_ETH_ERROR_NONE;
+            __DMB();
+            eth_handle.gState = HAL_ETH_STATE_READY;
+            eth_diagnostics.transmit_recoveries++;
+        }
     }
     return status;
 }

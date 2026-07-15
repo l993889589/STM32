@@ -358,6 +358,78 @@ HAL_StatusTypeDef bsp_uart_receive_stop(bsp_uart_port_t port)
     return HAL_OK;
 }
 
+HAL_StatusTypeDef bsp_uart_set_baud_rate(bsp_uart_port_t port,
+                                          uint32_t baud_rate)
+{
+    bsp_uart_device_t *device = bsp_uart_get_device(port);
+    uint32_t interrupt_state;
+    uint8_t receive_enabled;
+    HAL_StatusTypeDef status;
+
+    if ((device == NULL) || (device->initialized == 0U) || (baud_rate == 0U))
+    {
+        return HAL_ERROR;
+    }
+
+    interrupt_state = bsp_uart_enter_critical();
+    if ((device->tx_count != 0U) || (device->tx_state != BSP_UART_TX_IDLE))
+    {
+        bsp_uart_exit_critical(interrupt_state);
+        return HAL_BUSY;
+    }
+
+    if (device->baud_rate == baud_rate)
+    {
+        bsp_uart_exit_critical(interrupt_state);
+        return HAL_OK;
+    }
+
+    receive_enabled = (device->rx_callback != NULL) ? 1U : 0U;
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_RXNE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_TXE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_TC);
+    device->handle.Init.BaudRate = baud_rate;
+    status = HAL_UART_Init(&device->handle);
+    if (status == HAL_OK)
+    {
+        status = HAL_UARTEx_SetTxFifoThreshold(&device->handle,
+                                              UART_TXFIFO_THRESHOLD_1_8);
+    }
+    if (status == HAL_OK)
+    {
+        status = HAL_UARTEx_SetRxFifoThreshold(&device->handle,
+                                              UART_RXFIFO_THRESHOLD_1_8);
+    }
+    if (status == HAL_OK)
+    {
+        status = HAL_UARTEx_DisableFifoMode(&device->handle);
+    }
+
+    if (status == HAL_OK)
+    {
+        device->baud_rate = baud_rate;
+        WRITE_REG(device->instance->ICR,
+                  USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NECF |
+                  USART_ICR_ORECF | USART_ICR_TCCF);
+        SET_BIT(device->instance->RQR, USART_RQR_RXFRQ);
+        if (receive_enabled != 0U)
+        {
+            __HAL_UART_ENABLE_IT(&device->handle, UART_IT_RXNE);
+        }
+    }
+
+    bsp_uart_exit_critical(interrupt_state);
+    return status;
+}
+
+uint32_t bsp_uart_get_baud_rate(bsp_uart_port_t port)
+{
+    bsp_uart_device_t *device = bsp_uart_get_device(port);
+
+    return (device != NULL && device->initialized != 0U) ?
+           device->baud_rate : 0U;
+}
+
 HAL_StatusTypeDef bsp_uart_set_tx_callbacks(bsp_uart_port_t port,
                                              bsp_uart_tx_callback_t send_before,
                                              bsp_uart_tx_callback_t send_complete,
