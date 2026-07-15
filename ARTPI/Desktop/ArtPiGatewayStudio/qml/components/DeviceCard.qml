@@ -29,6 +29,7 @@ Panel {
                                                : "#FFC857"
     readonly property string stateText: active ? "正在通信"
                                                 : deviceState === "online" ? "在线"
+                                                : deviceState === "suspect" ? "疑似离线"
                                                 : deviceState === "offline" ? "离线退避"
                                                 : deviceState === "probing" ? "离线探测"
                                                 : deviceState

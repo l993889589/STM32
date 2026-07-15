@@ -16,6 +16,7 @@ ApplicationWindow {
     color: "#07162F"
 
     property int currentPage: 0
+    property int industrialSection: 0
     property date wallClock: new Date()
     readonly property color accent: "#31A8FF"
     readonly property color success: "#75E887"
@@ -47,8 +48,82 @@ ApplicationWindow {
         toastTimer.restart()
     }
 
+    function nextAvailableUnitId(exclusiveCount) {
+        var rowCount = Math.max(0, Math.min(Number(exclusiveCount), configDeviceModel.count))
+        for (var candidate = 1; candidate <= 247; ++candidate) {
+            var used = false
+            for (var index = 0; index < rowCount; ++index) {
+                if (Number(configDeviceModel.get(index).unitId) === candidate) {
+                    used = true
+                    break
+                }
+            }
+            if (!used)
+                return candidate
+        }
+        return 247
+    }
+
+    function appendDefaultConfigDevice() {
+        configDeviceModel.append({
+            "unitId": nextAvailableUnitId(configDeviceModel.count),
+            "timeoutMs": 200,
+            "coilAddress": 0,
+            "coilQuantity": 0,
+            "discreteAddress": 0,
+            "discreteQuantity": 0,
+            "holdingAddress": 0,
+            "holdingQuantity": 2,
+            "inputAddress": 0,
+            "inputQuantity": 2
+        })
+    }
+
+    function ensureConfigDeviceRows(requiredCount) {
+        var targetCount = Math.max(1, Math.min(10, Number(requiredCount)))
+        while (configDeviceModel.count < targetCount)
+            appendDefaultConfigDevice()
+    }
+
+    function normalizeActiveUnitIds(requiredCount) {
+        var targetCount = Math.max(1, Math.min(10, Number(requiredCount)))
+        ensureConfigDeviceRows(targetCount)
+
+        for (var index = 0; index < targetCount; ++index) {
+            var unitId = Number(configDeviceModel.get(index).unitId)
+            var duplicate = false
+            for (var previous = 0; previous < index; ++previous) {
+                if (Number(configDeviceModel.get(previous).unitId) === unitId) {
+                    duplicate = true
+                    break
+                }
+            }
+            if (unitId < 1 || unitId > 247 || duplicate)
+                configDeviceModel.setProperty(index, "unitId", nextAvailableUnitId(index))
+        }
+    }
+
+    function addConfigDevice() {
+        var nextCount = Math.min(10, Number(deviceCountSpin.value) + 1)
+        if (nextCount === Number(deviceCountSpin.value)) {
+            showToast("最多配置 10 台从机", false)
+            return
+        }
+
+        normalizeActiveUnitIds(nextCount)
+        deviceCountSpin.value = nextCount
+        configList.positionViewAtIndex(nextCount - 1, ListView.Center)
+
+        var device = configDeviceModel.get(nextCount - 1)
+        showToast("已添加 Unit " + device.unitId
+                  + "；保存后开始轮询，连续 3 次超时后进入离线退避。", true)
+    }
+
     function populateConfig() {
-        var c = gateway.config
+        loadConfigSnapshot(gateway.config)
+    }
+
+    function loadConfigSnapshot(c) {
         if (!c || !c.devices)
             return
 
@@ -76,6 +151,7 @@ ApplicationWindow {
                 "inputQuantity": Number(d.input.quantity)
             })
         }
+        normalizeActiveUnitIds(deviceCountSpin.value)
         configDialog.open()
     }
 
@@ -269,6 +345,12 @@ ApplicationWindow {
                     selected: window.currentPage === 3
                     onClicked: window.currentPage = 3
                 }
+                NavButton {
+                    text: "工业中心"
+                    iconText: "◇"
+                    selected: window.currentPage === 4
+                    onClicked: window.currentPage = 4
+                }
             }
 
             Item { Layout.fillWidth: true }
@@ -321,8 +403,10 @@ ApplicationWindow {
             }
 
             StatusPill {
-                text: gateway.connected ? "系统正常" : "连接断开"
-                statusColor: gateway.connected ? window.success : window.danger
+                text: gateway.connected ? "系统正常"
+                      : gateway.connectionState === "reconnecting" ? "正在重连" : "连接断开"
+                statusColor: gateway.connected ? window.success
+                             : gateway.connectionState === "reconnecting" ? window.warning : window.danger
                 pulse: gateway.connected
             }
         }
@@ -743,6 +827,18 @@ ApplicationWindow {
                     }
                 }
             }
+
+            // Industrial center: P1-P3 features.
+            IndustrialCenter {
+                id: industrialCenter
+                hostWindow: window
+                section: window.industrialSection
+                accent: window.accent
+                success: window.success
+                warning: window.warning
+                danger: window.danger
+                muted: window.muted
+            }
         }
     }
 
@@ -779,6 +875,11 @@ ApplicationWindow {
             }
             Text { text: "运行 " + gateway.uptimeText; color: window.muted; font.pixelSize: 11 }
             Text { text: "更新 " + (gateway.lastUpdated || "—"); color: window.muted; font.pixelSize: 11 }
+            Text {
+                text: "FW " + (gateway.firmwareVersion || "未知") + " · API v" + gateway.apiVersion
+                color: window.muted
+                font.pixelSize: 11
+            }
             Item { Layout.fillWidth: true }
             Text {
                 text: Number(window.value(gateway.rs485, "role", 0)) === 1 ? "RS485 主机调度" : "RS485 从机响应"
@@ -852,7 +953,24 @@ ApplicationWindow {
 
                 ComboBox { id: roleCombo; Layout.fillWidth: true; model: ["从机", "主机"] }
                 SpinBox { id: unitIdSpin; Layout.fillWidth: true; from: 1; to: 247; editable: true }
-                SpinBox { id: deviceCountSpin; Layout.fillWidth: true; from: 1; to: 10; editable: true }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    SpinBox {
+                        id: deviceCountSpin
+                        Layout.fillWidth: true
+                        from: 1
+                        to: 10
+                        editable: true
+                        onValueModified: window.normalizeActiveUnitIds(value)
+                    }
+                    StudioButton {
+                        text: "+ 添加"
+                        implicitWidth: 72
+                        enabled: deviceCountSpin.value < 10
+                        onClicked: window.addConfigDevice()
+                    }
+                }
                 SpinBox { id: pollPeriodSpin; Layout.fillWidth: true; from: 100; to: 60000; stepSize: 100; editable: true }
                 ComboBox { id: probeCombo; Layout.fillWidth: true; model: ["60 秒", "5 分钟"] }
                 Switch { id: redLedSwitch; Layout.alignment: Qt.AlignHCenter }
@@ -1009,7 +1127,7 @@ ApplicationWindow {
                 Layout.rightMargin: 22
                 Text {
                     Layout.fillWidth: true
-                    text: "数量以外的设备配置仍会保留，重新增加从机数量时可继续使用。"
+                    text: "点击“+ 添加”启用下一台从机；保存后连续 3 次超时会显示离线退避。数量以外的配置仍会保留。"
                     color: "#61798e"
                     font.pixelSize: 10
                 }
@@ -1030,7 +1148,6 @@ ApplicationWindow {
                             "redLedOn": redLedSwitch.checked ? 1 : 0,
                             "buzzerOn": buzzerSwitch.checked ? 1 : 0
                         }, devices)
-                        configDialog.close()
                     }
                 }
             }
@@ -1086,6 +1203,7 @@ ApplicationWindow {
     Connections {
         target: gateway
         function onCommandCompleted(ok, message) { window.showToast(message, ok) }
+        function onConfigurationSaved() { configDialog.close() }
     }
 
     Component.onCompleted: gateway.connectNow()

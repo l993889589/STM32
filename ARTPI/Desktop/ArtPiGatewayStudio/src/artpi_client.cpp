@@ -6,6 +6,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSettings>
+#include <QSet>
 #include <QUrl>
 
 #include <utility>
@@ -122,9 +123,37 @@ QString ArtPiClient::connectionText() const
     return m_lastError.isEmpty() ? tr("未连接") : tr("连接异常");
 }
 
+QString ArtPiClient::connectionState() const
+{
+    if (m_connected)
+    {
+        return QStringLiteral("online");
+    }
+    if (m_consecutiveFailures > 0)
+    {
+        return QStringLiteral("reconnecting");
+    }
+    return QStringLiteral("offline");
+}
+
+int ArtPiClient::consecutiveFailures() const
+{
+    return m_consecutiveFailures;
+}
+
 QString ArtPiClient::lastError() const
 {
     return m_lastError;
+}
+
+int ArtPiClient::apiVersion() const
+{
+    return m_apiVersion;
+}
+
+QString ArtPiClient::firmwareVersion() const
+{
+    return m_firmwareVersion;
 }
 
 QString ArtPiClient::boardName() const
@@ -177,6 +206,11 @@ QVariantMap ArtPiClient::lastCommand() const
     return m_lastCommand;
 }
 
+QVariantMap ArtPiClient::statusSnapshot() const
+{
+    return m_statusSnapshot;
+}
+
 QVariantMap ArtPiClient::config() const
 {
     return m_config;
@@ -221,6 +255,7 @@ void ArtPiClient::disconnectFromBoard()
     m_refreshTimer.stop();
     setConnected(false);
     m_statusInFlight = false;
+    m_consecutiveFailures = 0;
     m_devices.clear();
     m_onlineDeviceCount = 0;
     m_offlineDeviceCount = 0;
@@ -264,6 +299,17 @@ void ArtPiClient::loadConfig()
 void ArtPiClient::saveConfiguration(const QVariantMap &general,
                                     const QVariantList &devices)
 {
+    const QString validationError = validateConfiguration(general, devices);
+    if (!validationError.isEmpty())
+    {
+        const QString message = tr("配置未发送：%1").arg(validationError);
+        setLastError(message);
+        addLog(QStringLiteral("error"), message);
+        emit configurationFailed(message);
+        emit commandCompleted(false, message);
+        return;
+    }
+
     QJsonObject body;
     body.insert(QStringLiteral("rs485_role"), mapInt(general, QStringLiteral("rs485Role"), 1));
     body.insert(QStringLiteral("modbus_unit_id"), mapInt(general, QStringLiteral("modbusUnitId"), 2));
@@ -280,7 +326,8 @@ void ArtPiClient::saveConfiguration(const QVariantMap &general,
         QStringLiteral("coil"), QStringLiteral("discrete"),
         QStringLiteral("holding"), QStringLiteral("input")
     };
-    for (int index = 0; index < qMin(devices.size(), 10); ++index)
+    const int activeDeviceCount = body.value(QStringLiteral("master_device_count")).toInt();
+    for (int index = 0; index < activeDeviceCount; ++index)
     {
         const QVariantMap device = devices.at(index).toMap();
         const QString root = QStringLiteral("d%1_").arg(index);
@@ -290,7 +337,6 @@ void ArtPiClient::saveConfiguration(const QVariantMap &general,
                     deviceField(device, QStringLiteral("timeoutMs"), QStringLiteral("timeout_ms"), 200).toInt());
         for (const QString &prefix : prefixes)
         {
-            const QString camelPrefix = prefix.left(1).toUpper() + prefix.mid(1);
             body.insert(root + prefix + QStringLiteral("_address"),
                         deviceField(device,
                                     prefix + QStringLiteral("Address"),
@@ -301,7 +347,6 @@ void ArtPiClient::saveConfiguration(const QVariantMap &general,
                                     prefix + QStringLiteral("Quantity"),
                                     prefix + QStringLiteral("_quantity"),
                                     0).toInt());
-            Q_UNUSED(camelPrefix)
         }
     }
 
@@ -319,11 +364,20 @@ void ArtPiClient::saveConfiguration(const QVariantMap &general,
 
 void ArtPiClient::sendCommand(int deviceIndex, int type, int address, int value)
 {
+    const int normalizedDevice = qBound(0, deviceIndex, 9);
+    const int normalizedType = qBound(0, type, 1);
+    const int normalizedAddress = qBound(0, address, 65535);
+    const int normalizedValue = qBound(0, value, 65535);
     QJsonObject body;
-    body.insert(QStringLiteral("device_index"), qBound(0, deviceIndex, 9));
-    body.insert(QStringLiteral("type"), qBound(0, type, 1));
-    body.insert(QStringLiteral("address"), qBound(0, address, 65535));
-    body.insert(QStringLiteral("value"), qBound(0, value, 65535));
+    body.insert(QStringLiteral("device_index"), normalizedDevice);
+    body.insert(QStringLiteral("type"), normalizedType);
+    body.insert(QStringLiteral("address"), normalizedAddress);
+    body.insert(QStringLiteral("value"), normalizedValue);
+
+    emit commandSubmitted(normalizedDevice,
+                          normalizedType,
+                          normalizedAddress,
+                          normalizedValue);
 
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     beginRequest();
@@ -422,7 +476,26 @@ void ArtPiClient::handleReply(QNetworkReply *reply, RequestKind kind)
     if (!transportOk || status < 200 || status >= 300 || !jsonOk || !apiOk)
     {
         QString message;
-        if (!transportOk)
+        if (jsonOk && root.contains(QStringLiteral("error")))
+        {
+            message = root.value(QStringLiteral("error")).toString();
+            const QString field = root.value(QStringLiteral("field")).toString();
+            const QString reason = root.value(QStringLiteral("reason")).toString();
+            if (!field.isEmpty())
+            {
+                message += tr("（字段：%1").arg(field);
+                if (!reason.isEmpty())
+                {
+                    message += tr("，原因：%1").arg(reason);
+                }
+                message += QLatin1Char('）');
+            }
+            if (status > 0)
+            {
+                message += tr(" [HTTP %1]").arg(status);
+            }
+        }
+        else if (!transportOk)
         {
             message = transportError;
         }
@@ -439,6 +512,7 @@ void ArtPiClient::handleReply(QNetworkReply *reply, RequestKind kind)
         setLastError(message);
         if (kind == RequestKind::Status)
         {
+            ++m_consecutiveFailures;
             setConnected(false);
             if (m_autoRefresh && !m_refreshTimer.isActive())
             {
@@ -446,9 +520,18 @@ void ArtPiClient::handleReply(QNetworkReply *reply, RequestKind kind)
             }
         }
         addLog(QStringLiteral("error"), message);
+        const QString operation = kind == RequestKind::Status ? QStringLiteral("status")
+                                  : kind == RequestKind::ConfigRead ? QStringLiteral("config-read")
+                                  : kind == RequestKind::ConfigWrite ? QStringLiteral("config-write")
+                                                                    : QStringLiteral("command");
+        emit requestFailed(operation, status, message);
         if ((kind == RequestKind::Command) || (kind == RequestKind::ConfigWrite))
         {
             emit commandCompleted(false, message);
+        }
+        if (kind == RequestKind::ConfigWrite)
+        {
+            emit configurationFailed(message);
         }
         return;
     }
@@ -487,6 +570,9 @@ void ArtPiClient::handleReply(QNetworkReply *reply, RequestKind kind)
 void ArtPiClient::applyStatus(const QVariantMap &root)
 {
     const bool firstConnection = !m_connected;
+    m_statusSnapshot = root;
+    m_apiVersion = root.value(QStringLiteral("api_version")).toInt();
+    m_firmwareVersion = root.value(QStringLiteral("firmware_version")).toString();
     m_boardName = root.value(QStringLiteral("board")).toString();
     m_boardIp = root.value(QStringLiteral("ip")).toString();
     m_uptimeSeconds = root.value(QStringLiteral("uptime_s")).toULongLong();
@@ -511,6 +597,7 @@ void ArtPiClient::applyStatus(const QVariantMap &root)
         }
     }
     m_lastUpdated = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
+    m_consecutiveFailures = 0;
     setLastError({});
     setConnected(true);
     if (firstConnection)
@@ -574,6 +661,7 @@ void ArtPiClient::addLog(const QString &level, const QString &message)
         m_logs.removeFirst();
     }
     emit logsChanged();
+    emit logAdded(level, message);
 }
 
 int ArtPiClient::mapInt(const QVariantMap &map, const QString &key, int fallback)
@@ -595,4 +683,103 @@ QVariant ArtPiClient::deviceField(const QVariantMap &device,
         return device.value(snakeCase);
     }
     return fallback;
+}
+
+QString ArtPiClient::validateConfiguration(const QVariantMap &general,
+                                           const QVariantList &devices) const
+{
+    const int role = mapInt(general, QStringLiteral("rs485Role"), -1);
+    const int unitId = mapInt(general, QStringLiteral("modbusUnitId"), 0);
+    const int deviceCount = mapInt(general,
+                                   QStringLiteral("masterDeviceCount"),
+                                   devices.size());
+    const int offlineProbe = mapInt(general, QStringLiteral("offlineProbeSeconds"), 0);
+    const int pollPeriod = mapInt(general, QStringLiteral("pollPeriodMs"), 0);
+    const int redLed = mapInt(general, QStringLiteral("redLedOn"), 0);
+    const int buzzer = mapInt(general, QStringLiteral("buzzerOn"), 0);
+
+    if (role < 0 || role > 1)
+    {
+        return tr("RS485 角色无效");
+    }
+    if (unitId < 1 || unitId > 247)
+    {
+        return tr("本机 Unit ID 必须为 1~247");
+    }
+    if (deviceCount < 1 || deviceCount > 10 || devices.size() < deviceCount)
+    {
+        return tr("从机数量与轮询表不一致");
+    }
+    if (offlineProbe != 60 && offlineProbe != 300)
+    {
+        return tr("离线探测周期只能为 60 或 300 秒");
+    }
+    if (pollPeriod < 100 || pollPeriod > 60000)
+    {
+        return tr("轮询周期必须为 100~60000 ms");
+    }
+    if (redLed < 0 || redLed > 1 || buzzer < 0 || buzzer > 1)
+    {
+        return tr("本地输出值无效");
+    }
+
+    QSet<int> unitIds;
+    const QStringList prefixes = {
+        QStringLiteral("coil"), QStringLiteral("discrete"),
+        QStringLiteral("holding"), QStringLiteral("input")
+    };
+    for (int index = 0; index < deviceCount; ++index)
+    {
+        const QVariantMap device = devices.at(index).toMap();
+        const int deviceUnitId = deviceField(device,
+                                             QStringLiteral("unitId"),
+                                             QStringLiteral("unit_id"),
+                                             0).toInt();
+        const int timeout = deviceField(device,
+                                        QStringLiteral("timeoutMs"),
+                                        QStringLiteral("timeout_ms"),
+                                        0).toInt();
+        if (deviceUnitId < 1 || deviceUnitId > 247)
+        {
+            return tr("第 %1 台从机 Unit ID 无效").arg(index + 1);
+        }
+        if (unitIds.contains(deviceUnitId))
+        {
+            return tr("Unit ID %1 重复").arg(deviceUnitId);
+        }
+        unitIds.insert(deviceUnitId);
+        if (timeout < 20 || timeout > 5000)
+        {
+            return tr("第 %1 台从机超时必须为 20~5000 ms").arg(index + 1);
+        }
+
+        int enabledRanges = 0;
+        for (const QString &prefix : prefixes)
+        {
+            const int address = deviceField(device,
+                                            prefix + QStringLiteral("Address"),
+                                            prefix + QStringLiteral("_address"),
+                                            -1).toInt();
+            const int quantity = deviceField(device,
+                                             prefix + QStringLiteral("Quantity"),
+                                             prefix + QStringLiteral("_quantity"),
+                                             -1).toInt();
+            if (address < 0 || address > 65535 || quantity < 0 || quantity > 16 ||
+                (quantity > 0 && address + quantity > 65536))
+            {
+                return tr("第 %1 台从机 %2 地址范围无效")
+                    .arg(index + 1)
+                    .arg(prefix);
+            }
+            if (quantity > 0)
+            {
+                ++enabledRanges;
+            }
+        }
+        if (enabledRanges == 0)
+        {
+            return tr("第 %1 台从机至少启用一类寄存器").arg(index + 1);
+        }
+    }
+    return {};
 }

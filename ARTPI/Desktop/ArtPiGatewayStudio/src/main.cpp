@@ -1,4 +1,5 @@
 #include "artpi_client.h"
+#include "industrial_manager.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -11,6 +12,8 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QTextStream>
 
@@ -209,6 +212,146 @@ int runIntegrationTest(int argc, char *argv[])
     client.connectNow();
     return application.exec();
 }
+
+int runIndustrialSelfTest(int argc, char *argv[])
+{
+    QCoreApplication application(argc, argv);
+    QCoreApplication::setOrganizationName(QStringLiteral("Leduo Lab"));
+    QCoreApplication::setOrganizationDomain(QStringLiteral("leduo.local"));
+    QCoreApplication::setApplicationName(QStringLiteral("ART-Pi Gateway Studio Industrial Test"));
+    QStandardPaths::setTestModeEnabled(true);
+
+    const QString dataDirectory = QStandardPaths::writableLocation(
+        QStandardPaths::AppLocalDataLocation);
+    QDir().mkpath(dataDirectory);
+    const QString databasePath = QDir(dataDirectory).filePath(QStringLiteral("gateway_studio.db"));
+    QFile::remove(databasePath);
+    QFile::remove(databasePath + QStringLiteral("-wal"));
+    QFile::remove(databasePath + QStringLiteral("-shm"));
+
+    IndustrialManager manager;
+    const int tagId = manager.addTag({
+        {QStringLiteral("name"), QStringLiteral("Pressure")},
+        {QStringLiteral("device_index"), 0},
+        {QStringLiteral("register_class"), QStringLiteral("holding")},
+        {QStringLiteral("value_index"), 0},
+        {QStringLiteral("scale"), 0.1},
+        {QStringLiteral("value_offset"), 0.0},
+        {QStringLiteral("unit"), QStringLiteral("bar")},
+        {QStringLiteral("high_enabled"), true},
+        {QStringLiteral("high_limit"), 10.0},
+        {QStringLiteral("low_enabled"), false},
+        {QStringLiteral("enabled"), true}
+    });
+
+    const QVariantList values{
+        QVariantList{0, 1},
+        QVariantList{1, 0},
+        QVariantList{125, 126},
+        QVariantList{42, 43}
+    };
+    const QVariantMap snapshot{
+        {QStringLiteral("board"), QStringLiteral("ART-Pi Test")},
+        {QStringLiteral("ip"), QStringLiteral("192.0.2.1")},
+        {QStringLiteral("firmware_version"), QStringLiteral("test")},
+        {QStringLiteral("rs485"), QVariantMap{
+             {QStringLiteral("devices"), QVariantList{
+                  QVariantMap{{QStringLiteral("unit_id"), 1},
+                              {QStringLiteral("state"), QStringLiteral("online")},
+                              {QStringLiteral("values"), values}}
+              }}
+         }}
+    };
+    manager.ingestSnapshot(snapshot);
+    manager.selectHistory(tagId, 1);
+
+    const QVariantMap configuration{
+        {QStringLiteral("ok"), true},
+        {QStringLiteral("rs485_role"), 1},
+        {QStringLiteral("master_device_count"), 1}
+    };
+    const int versionId = manager.saveConfigurationVersion(QStringLiteral("self-test"),
+                                                            QStringLiteral("http://192.0.2.1"),
+                                                            configuration);
+    const int gatewayId = manager.addGateway(QStringLiteral("Test Gateway"),
+                                             QStringLiteral("http://192.0.2.1"),
+                                             QStringLiteral("self-test"));
+    const bool securityOk = manager.initializeSecurity(QStringLiteral("industrial-test"));
+    const bool userOk = manager.saveUser(QStringLiteral("operator1"),
+                                         QStringLiteral("operator-test"),
+                                         QStringLiteral("operator"), true);
+    manager.logout();
+    const bool loginOk = manager.login(QStringLiteral("admin"),
+                                       QStringLiteral("industrial-test"));
+
+    const QString backupPath = QDir::temp().filePath(QStringLiteral("artpi_gateway_self_test.db"));
+    const QString reportPath = QDir::temp().filePath(QStringLiteral("artpi_gateway_self_test.csv"));
+    QFile::remove(backupPath);
+    QFile::remove(reportPath);
+    const bool backupOk = manager.backupDatabase(backupPath);
+    const bool reportOk = manager.exportReport(reportPath, 1);
+    const bool outletOk = manager.configureOutlet({
+        {QStringLiteral("enabled"), false},
+        {QStringLiteral("host"), QStringLiteral("127.0.0.1")},
+        {QStringLiteral("port"), 1883},
+        {QStringLiteral("topic"), QStringLiteral("artpi/test")},
+        {QStringLiteral("clientId"), QStringLiteral("artpi-self-test")},
+        {QStringLiteral("intervalSeconds"), 10}
+    });
+
+    const bool passed = tagId > 0 && manager.tags().size() == 1 &&
+                        !manager.history().isEmpty() && manager.activeAlarmCount() == 1 &&
+                        manager.acknowledgeAllAlarms() == 1 && versionId > 0 &&
+                        manager.restoreConfigurationVersion(versionId).value(QStringLiteral("ok")).toBool() &&
+                        gatewayId > 0 && securityOk && userOk && loginOk &&
+                        manager.users().size() == 2 && backupOk && reportOk && outletOk &&
+                        QFileInfo(backupPath).size() > 0 && QFileInfo(reportPath).size() > 0;
+    qInfo().noquote() << (passed ? QStringLiteral("INDUSTRIAL-SELF-TEST PASS")
+                                : QStringLiteral("INDUSTRIAL-SELF-TEST FAIL"));
+    return passed ? 0 : 7;
+}
+
+int runMqttSelfTest(int argc, char *argv[])
+{
+    QCoreApplication application(argc, argv);
+    QCoreApplication::setOrganizationName(QStringLiteral("Leduo Lab"));
+    QCoreApplication::setApplicationName(QStringLiteral("ART-Pi Gateway Studio MQTT Test"));
+    QStandardPaths::setTestModeEnabled(true);
+
+    // Make the loopback test repeatable even when a previous run persisted enabled=true.
+    QSettings().setValue(QStringLiteral("outlet/enabled"), false);
+
+    IndustrialManager manager;
+    manager.ingestSnapshot({
+        {QStringLiteral("board"), QStringLiteral("ART-Pi MQTT Test")},
+        {QStringLiteral("ip"), QStringLiteral("192.0.2.2")},
+        {QStringLiteral("firmware_version"), QStringLiteral("test")},
+        {QStringLiteral("rs485"), QVariantMap{{QStringLiteral("devices"), QVariantList{}}}}
+    });
+
+    bool published = false;
+    QObject::connect(&manager, &IndustrialManager::outletStateChanged,
+                     &application, [&]() {
+        if (manager.outletState() == QStringLiteral("online") && !published)
+        {
+            published = true;
+            manager.publishCurrentSnapshot();
+            QTimer::singleShot(300, &application, [&]() { application.exit(0); });
+        }
+    });
+    manager.configureOutlet({
+        {QStringLiteral("enabled"), true},
+        {QStringLiteral("host"), QStringLiteral("127.0.0.1")},
+        {QStringLiteral("port"), 18883},
+        {QStringLiteral("topic"), QStringLiteral("artpi/self-test")},
+        {QStringLiteral("clientId"), QStringLiteral("artpi-mqtt-self-test")},
+        {QStringLiteral("username"), QString()},
+        {QStringLiteral("password"), QString()},
+        {QStringLiteral("intervalSeconds"), 10}
+    });
+    QTimer::singleShot(6000, &application, [&]() { application.exit(8); });
+    return application.exec();
+}
 }
 
 int main(int argc, char *argv[])
@@ -221,17 +364,53 @@ int main(int argc, char *argv[])
     {
         return runIntegrationTest(argc, argv);
     }
+    if (hasArgument(argc, argv, QByteArrayLiteral("--industrial-self-test")))
+    {
+        return runIndustrialSelfTest(argc, argv);
+    }
+    if (hasArgument(argc, argv, QByteArrayLiteral("--mqtt-self-test")))
+    {
+        return runMqttSelfTest(argc, argv);
+    }
 
     QGuiApplication application(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("Leduo Lab"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("leduo.local"));
     QCoreApplication::setApplicationName(QStringLiteral("ART-Pi Gateway Studio"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("0.4.0"));
     QQuickStyle::setStyle(QStringLiteral("Basic"));
 
     ArtPiClient client;
+    IndustrialManager industrial;
+    QObject::connect(&client, &ArtPiClient::statusUpdated, &industrial, [&]() {
+        industrial.ingestSnapshot(client.statusSnapshot());
+    });
+    QObject::connect(&client, &ArtPiClient::logAdded, &industrial,
+                     [&](const QString &level, const QString &message) {
+        industrial.recordLog(level, QStringLiteral("gateway"), message);
+    });
+    QObject::connect(&client, &ArtPiClient::commandSubmitted, &industrial,
+                     [&](int deviceIndex, int commandType, int address, int value) {
+        industrial.recordAudit(QStringLiteral("modbus.command"),
+                               QCoreApplication::translate("main", "设备 %1").arg(deviceIndex + 1),
+                               QCoreApplication::translate("main", "类型 %1，地址 %2，值 %3")
+                                   .arg(commandType).arg(address).arg(value),
+                               true);
+    });
+    QObject::connect(&client, &ArtPiClient::configurationSaved, &industrial, [&]() {
+        industrial.recordAudit(QStringLiteral("gateway.config"),
+                               client.endpoint(),
+                               QStringLiteral("configuration accepted"),
+                               true);
+    });
+    QObject::connect(&industrial, &IndustrialManager::gatewayActivationRequested,
+                     &client, [&](const QString &endpoint) {
+        client.setEndpoint(endpoint);
+        client.connectNow();
+    });
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("gateway"), &client);
+    engine.rootContext()->setContextProperty(QStringLiteral("industrial"), &industrial);
     QObject::connect(&engine,
                      &QQmlApplicationEngine::objectCreationFailed,
                      &application,
@@ -246,6 +425,14 @@ int main(int argc, char *argv[])
                                 valueAfterArgument(argc,
                                                    argv,
                                                    QByteArrayLiteral("--page"),
+                                                    QStringLiteral("0")).toInt());
+    }
+    if (rootObject != nullptr && hasArgument(argc, argv, QByteArrayLiteral("--industrial-section")))
+    {
+        rootObject->setProperty("industrialSection",
+                                valueAfterArgument(argc,
+                                                   argv,
+                                                   QByteArrayLiteral("--industrial-section"),
                                                    QStringLiteral("0")).toInt());
     }
     if (rootObject != nullptr && hasArgument(argc, argv, QByteArrayLiteral("--open-config")))

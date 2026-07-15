@@ -22,7 +22,11 @@ class ArtPiClient final : public QObject
     Q_PROPERTY(bool autoRefresh READ autoRefresh WRITE setAutoRefresh NOTIFY autoRefreshChanged)
     Q_PROPERTY(int refreshInterval READ refreshInterval WRITE setRefreshInterval NOTIFY refreshIntervalChanged)
     Q_PROPERTY(QString connectionText READ connectionText NOTIFY connectionChanged)
+    Q_PROPERTY(QString connectionState READ connectionState NOTIFY connectionChanged)
+    Q_PROPERTY(int consecutiveFailures READ consecutiveFailures NOTIFY connectionChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    Q_PROPERTY(int apiVersion READ apiVersion NOTIFY telemetryChanged)
+    Q_PROPERTY(QString firmwareVersion READ firmwareVersion NOTIFY telemetryChanged)
     Q_PROPERTY(QString boardName READ boardName NOTIFY telemetryChanged)
     Q_PROPERTY(QString boardIp READ boardIp NOTIFY telemetryChanged)
     Q_PROPERTY(qulonglong uptimeSeconds READ uptimeSeconds NOTIFY telemetryChanged)
@@ -30,6 +34,7 @@ class ArtPiClient final : public QObject
     Q_PROPERTY(QVariantMap ethernet READ ethernet NOTIFY telemetryChanged)
     Q_PROPERTY(QVariantMap rs485 READ rs485 NOTIFY telemetryChanged)
     Q_PROPERTY(QVariantMap lastCommand READ lastCommand NOTIFY telemetryChanged)
+    Q_PROPERTY(QVariantMap statusSnapshot READ statusSnapshot NOTIFY telemetryChanged)
     Q_PROPERTY(QVariantMap config READ config NOTIFY configChanged)
     Q_PROPERTY(QVariantList logs READ logs NOTIFY logsChanged)
     Q_PROPERTY(DeviceListModel *devices READ devices CONSTANT)
@@ -49,7 +54,11 @@ public:
     int refreshInterval() const;
     void setRefreshInterval(int milliseconds);
     QString connectionText() const;
+    QString connectionState() const;
+    int consecutiveFailures() const;
     QString lastError() const;
+    int apiVersion() const;
+    QString firmwareVersion() const;
     QString boardName() const;
     QString boardIp() const;
     qulonglong uptimeSeconds() const;
@@ -57,6 +66,7 @@ public:
     QVariantMap ethernet() const;
     QVariantMap rs485() const;
     QVariantMap lastCommand() const;
+    QVariantMap statusSnapshot() const;
     QVariantMap config() const;
     QVariantList logs() const;
     DeviceListModel *devices();
@@ -86,6 +96,10 @@ signals:
     void statusUpdated();
     void configUpdated();
     void configurationSaved();
+    void configurationFailed(const QString &message);
+    void requestFailed(const QString &operation, int httpStatus, const QString &message);
+    void logAdded(const QString &level, const QString &message);
+    void commandSubmitted(int deviceIndex, int commandType, int address, int value);
     void commandQueued(qulonglong commandId);
     void commandCompleted(bool ok, const QString &message);
 
@@ -110,6 +124,8 @@ private:
     void setConnected(bool connected);
     void setLastError(const QString &error);
     void addLog(const QString &level, const QString &message);
+    QString validateConfiguration(const QVariantMap &general,
+                                  const QVariantList &devices) const;
     static int mapInt(const QVariantMap &map, const QString &key, int fallback = 0);
     static QVariant deviceField(const QVariantMap &device,
                                 const QString &camelCase,
@@ -124,15 +140,19 @@ private:
     bool m_autoRefresh = true;
     bool m_statusInFlight = false;
     bool m_transportBusy = false;
+    int m_consecutiveFailures = 0;
     int m_pendingRequests = 0;
     int m_refreshInterval = 1000;
     QString m_lastError;
+    int m_apiVersion = 0;
+    QString m_firmwareVersion;
     QString m_boardName;
     QString m_boardIp;
     qulonglong m_uptimeSeconds = 0;
     QVariantMap m_ethernet;
     QVariantMap m_rs485;
     QVariantMap m_lastCommand;
+    QVariantMap m_statusSnapshot;
     QVariantMap m_config;
     QVariantList m_logs;
     int m_onlineDeviceCount = 0;
