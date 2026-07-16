@@ -1,3 +1,8 @@
+/**
+ * @file bsp_beep.c
+ * @brief ART-Pi H750 buzzer BSP implementation.
+ */
+
 #include "bsp.h"
 
 /* INDUSTRY-IO active buzzer: PH7 drives the base of an NPN transistor. */
@@ -6,6 +11,7 @@
 
 static uint8_t beep_is_on;
 
+/** @brief Perform the bsp_beep_init board-support operation. */
 void bsp_beep_init(void)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -24,18 +30,21 @@ void bsp_beep_init(void)
     beep_is_on = 0U;
 }
 
+/** @brief Perform the bsp_beep_on board-support operation. */
 void bsp_beep_on(void)
 {
     HAL_GPIO_WritePin(BSP_BEEP_PORT, BSP_BEEP_PIN, GPIO_PIN_SET);
     beep_is_on = 1U;
 }
 
+/** @brief Perform the bsp_beep_off board-support operation. */
 void bsp_beep_off(void)
 {
     HAL_GPIO_WritePin(BSP_BEEP_PORT, BSP_BEEP_PIN, GPIO_PIN_RESET);
     beep_is_on = 0U;
 }
 
+/** @brief Perform the bsp_beep_toggle board-support operation. */
 void bsp_beep_toggle(void)
 {
     if (beep_is_on != 0U)
@@ -48,6 +57,7 @@ void bsp_beep_toggle(void)
     }
 }
 
+/** @brief Perform the bsp_beep_is_on board-support operation. */
 uint8_t bsp_beep_is_on(void)
 {
     return beep_is_on;

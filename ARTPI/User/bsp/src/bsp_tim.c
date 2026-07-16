@@ -1,3 +1,8 @@
+/**
+ * @file bsp_tim.c
+ * @brief ART-Pi H750 general timer BSP implementation.
+ */
+
 #include "bsp.h"
 
 #define BSP_TIM_INSTANCE     TIM2
@@ -15,6 +20,7 @@ static HAL_StatusTypeDef bsp_tim_get_channel_resources(bsp_tim_channel_t channel
                                                         uint32_t *interrupt);
 static void bsp_tim_handle_interrupt(uint32_t index, uint32_t interrupt);
 
+/** @brief Perform the bsp_tim_init board-support operation. */
 HAL_StatusTypeDef bsp_tim_init(void)
 {
     uint32_t timer_clock;
@@ -56,6 +62,7 @@ HAL_StatusTypeDef bsp_tim_init(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_tim_start board-support operation. */
 HAL_StatusTypeDef bsp_tim_start(bsp_tim_channel_t channel,
                                 uint32_t delay_us,
                                 bsp_tim_callback_t callback,
@@ -93,6 +100,7 @@ HAL_StatusTypeDef bsp_tim_start(bsp_tim_channel_t channel,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_tim_stop board-support operation. */
 HAL_StatusTypeDef bsp_tim_stop(bsp_tim_channel_t channel)
 {
     volatile uint32_t *compare;
@@ -119,11 +127,13 @@ HAL_StatusTypeDef bsp_tim_stop(bsp_tim_channel_t channel)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_tim_now_us board-support operation. */
 uint32_t bsp_tim_now_us(void)
 {
     return (tim_initialized != 0U) ? BSP_TIM_INSTANCE->CNT : 0U;
 }
 
+/** @brief Perform the bsp_tim_get_clock board-support operation. */
 static uint32_t bsp_tim_get_clock(void)
 {
     uint32_t timer_clock = HAL_RCC_GetPCLK1Freq();
@@ -136,6 +146,7 @@ static uint32_t bsp_tim_get_clock(void)
     return timer_clock;
 }
 
+/** @brief Perform the bsp_tim_get_channel_resources board-support operation. */
 static HAL_StatusTypeDef bsp_tim_get_channel_resources(bsp_tim_channel_t channel,
                                                         volatile uint32_t **compare,
                                                         uint32_t *interrupt)
@@ -173,6 +184,7 @@ static HAL_StatusTypeDef bsp_tim_get_channel_resources(bsp_tim_channel_t channel
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_tim_handle_interrupt board-support operation. */
 static void bsp_tim_handle_interrupt(uint32_t index, uint32_t interrupt)
 {
     bsp_tim_callback_t callback;
@@ -197,6 +209,7 @@ static void bsp_tim_handle_interrupt(uint32_t index, uint32_t interrupt)
     }
 }
 
+/** @brief Handle the TIM2_IRQHandler interrupt. */
 void TIM2_IRQHandler(void)
 {
     bsp_tim_handle_interrupt(0U, TIM_IT_CC1);

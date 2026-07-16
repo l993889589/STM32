@@ -6,13 +6,13 @@
 #include "bsp.h"
 #include "app_h563_ota_master.h"
 #include "ld_modbus_client.h"
-#include "ld_modbus_ldc.h"
+#include "ld_modbus_rtu_framer.h"
+#include "ld_modbus_server.h"
 #include "tx_api.h"
 
 #define APP_MODBUS_TASK_PRIORITY                4U
 #define APP_MODBUS_TASK_STACK_SIZE           4096U
-#define APP_MODBUS_FRAME_TIMEOUT_US          1750U
-#define APP_MODBUS_PACKET_COUNT                 8U
+#define APP_MODBUS_BITS_PER_CHAR                10U
 #define APP_MODBUS_COIL_COUNT                   16U
 #define APP_MODBUS_DISCRETE_COUNT               16U
 #define APP_MODBUS_HOLDING_COUNT                16U
@@ -81,15 +81,12 @@ static TX_EVENT_FLAGS_GROUP modbus_control_events;
 static TX_MUTEX modbus_state_mutex;
 static uint64_t modbus_task_stack[APP_MODBUS_TASK_STACK_SIZE / sizeof(uint64_t)];
 
-static ldc_easy_t modbus_queue;
-static uint8_t modbus_ring[LDC_EASY_RING_BYTES(LD_MODBUS_RTU_MAX_ADU_LENGTH,
-                                                APP_MODBUS_PACKET_COUNT)];
-static ldc_packet_t modbus_packets[APP_MODBUS_PACKET_COUNT];
-static uint8_t modbus_request[LD_MODBUS_RTU_MAX_ADU_LENGTH];
+static uint8_t modbus_receive_active[LD_MODBUS_RTU_MAX_ADU_LENGTH];
+static uint8_t modbus_receive_ready[LD_MODBUS_RTU_MAX_ADU_LENGTH];
 static uint8_t modbus_response[LD_MODBUS_RTU_MAX_ADU_LENGTH];
 static uint8_t modbus_pdu[LD_MODBUS_MAX_PDU_LENGTH];
 static uint8_t modbus_frame[LD_MODBUS_RTU_MAX_ADU_LENGTH];
-static ld_modbus_ldc_rtu_server_t modbus_server;
+static ld_modbus_rtu_framer_t modbus_receiver;
 static ld_modbus_server_map_t modbus_map;
 
 static uint8_t modbus_coils[APP_MODBUS_COIL_COUNT];
@@ -114,15 +111,24 @@ static uint8_t modbus_poll_cursor;
 static uint8_t modbus_config_pending;
 static uint32_t modbus_next_command_id;
 static volatile uint32_t modbus_received_bytes;
+static volatile uint32_t modbus_unsupported_rx_blocks;
 static uint8_t modbus_started;
 
 static void app_modbus_task_entry(ULONG thread_input);
 static void app_modbus_receive(const uint8_t *data,
                                uint16_t length,
+                               uint32_t end_timestamp_ticks,
+                               uint32_t event_flags,
                                void *argument);
 static int app_modbus_send(void *user, const uint8_t *data, size_t length);
-static uint32_t app_modbus_ldc_lock(void *user);
-static void app_modbus_ldc_unlock(void *user, uint32_t state);
+static uint32_t app_modbus_receiver_lock(void);
+static void app_modbus_receiver_unlock(uint32_t state);
+static void app_modbus_receiver_poll(void);
+static uint8_t app_modbus_receiver_claim(
+    ld_modbus_rtu_frame_view_t *view);
+static uint8_t app_modbus_receiver_release(
+    ld_modbus_rtu_frame_view_t *view);
+static uint8_t app_modbus_slave_process_one(void);
 static ULONG app_modbus_ms_to_ticks(uint32_t milliseconds);
 static uint32_t app_modbus_ticks_to_ms(ULONG ticks);
 static uint8_t app_modbus_time_reached(ULONG now, ULONG deadline);
@@ -176,7 +182,6 @@ static void app_modbus_log_command(uint32_t command_id,
 
 HAL_StatusTypeDef app_modbus_rtu_start(void)
 {
-    ldc_easy_config_t queue_config;
     app_device_config_t stored_config;
     uint8_t loaded_from_flash;
     UINT status;
@@ -186,7 +191,6 @@ HAL_StatusTypeDef app_modbus_rtu_start(void)
         return HAL_BUSY;
     }
 
-    memset(&queue_config, 0, sizeof(queue_config));
     memset(&modbus_map, 0, sizeof(modbus_map));
     memset(&modbus_active_config, 0, sizeof(modbus_active_config));
     memset(&modbus_pending_config, 0, sizeof(modbus_pending_config));
@@ -197,6 +201,7 @@ HAL_StatusTypeDef app_modbus_rtu_start(void)
     memset(modbus_holding_registers, 0, sizeof(modbus_holding_registers));
     memset(modbus_input_registers, 0, sizeof(modbus_input_registers));
     modbus_received_bytes = 0UL;
+    modbus_unsupported_rx_blocks = 0UL;
     modbus_next_command_id = 1UL;
 
     app_device_config_set_defaults(&stored_config);
@@ -208,20 +213,20 @@ HAL_StatusTypeDef app_modbus_rtu_start(void)
     modbus_active_config.persistent = stored_config;
     modbus_pending_config = modbus_active_config;
 
-    queue_config.ring_buffer = modbus_ring;
-    queue_config.ring_size = sizeof(modbus_ring);
-    queue_config.packet_pool = modbus_packets;
-    queue_config.packet_count = APP_MODBUS_PACKET_COUNT;
-    queue_config.max_frame = LD_MODBUS_RTU_MAX_ADU_LENGTH;
-    queue_config.timeout_us = APP_MODBUS_FRAME_TIMEOUT_US;
-    queue_config.mode = LDC_MODE_PROTECT;
-    queue_config.lock = app_modbus_ldc_lock;
-    queue_config.unlock = app_modbus_ldc_unlock;
-    if (!ldc_easy_init(&modbus_queue, &queue_config))
+    if (!ld_modbus_rtu_framer_init(
+            &modbus_receiver,
+            modbus_receive_active,
+            modbus_receive_ready,
+            sizeof(modbus_receive_active),
+            bsp_uart_get_baud_rate(BSP_RS485_UART_PORT),
+            APP_MODBUS_BITS_PER_CHAR,
+            SystemCoreClock))
     {
         return HAL_ERROR;
     }
-    if (app_h563_ota_master_init(&modbus_queue) != HAL_OK)
+    if (app_h563_ota_master_init(&modbus_receiver,
+                                  APP_MODBUS_BITS_PER_CHAR,
+                                  SystemCoreClock) != HAL_OK)
     {
         return HAL_ERROR;
     }
@@ -237,20 +242,6 @@ HAL_StatusTypeDef app_modbus_rtu_start(void)
     modbus_input_registers[0] = 0x0750U;
     modbus_input_registers[1] = 0x0002U;
 
-    if (ld_modbus_ldc_rtu_server_init(
-            &modbus_server,
-            &modbus_queue,
-            modbus_active_config.persistent.modbus_unit_id,
-            &modbus_map,
-            app_modbus_send,
-            NULL,
-            modbus_request,
-            sizeof(modbus_request),
-            modbus_response,
-            sizeof(modbus_response)) != LD_MODBUS_STATUS_OK)
-    {
-        return HAL_ERROR;
-    }
     if (bsp_rs485_receive_start(app_modbus_receive, NULL) != HAL_OK)
     {
         return HAL_ERROR;
@@ -401,8 +392,8 @@ HAL_StatusTypeDef app_modbus_rtu_queue_command(
 HAL_StatusTypeDef app_modbus_rtu_get_diagnostics(
     app_modbus_rtu_diagnostics_t *diagnostics)
 {
-    ld_modbus_ldc_diagnostics_t server_diagnostics;
-    ldc_stats_t ldc_stats;
+    ld_modbus_rtu_framer_diag_t receiver_diagnostics;
+    uint32_t receiver_lock_state;
     uint32_t device_index;
 
     if ((diagnostics == NULL) || (modbus_started == 0U))
@@ -440,21 +431,20 @@ HAL_StatusTypeDef app_modbus_rtu_get_diagnostics(
     }
     (void)tx_mutex_put(&modbus_state_mutex);
 
-    if (ldc_easy_get_stats(&modbus_queue, &ldc_stats))
-    {
-        diagnostics->ldc_overflow = ldc_stats.overflow;
-        diagnostics->ldc_drop = ldc_stats.drop;
-    }
-    if ((diagnostics->role == APP_RS485_ROLE_SLAVE) &&
-        (ld_modbus_ldc_rtu_server_get_diagnostics(
-            &modbus_server,
-            &server_diagnostics) == LD_MODBUS_STATUS_OK))
-    {
-        diagnostics->received_frames = server_diagnostics.received_frames;
-        diagnostics->replied_frames = server_diagnostics.replied_frames;
-        diagnostics->crc_errors = server_diagnostics.crc_errors;
-        diagnostics->malformed_frames = server_diagnostics.malformed_frames;
-    }
+    receiver_lock_state = app_modbus_receiver_lock();
+    receiver_diagnostics = modbus_receiver.diag;
+    app_modbus_receiver_unlock(receiver_lock_state);
+    diagnostics->rtu_overflow_frames = receiver_diagnostics.overflow;
+    diagnostics->rtu_dropped_frames =
+        receiver_diagnostics.dropped_while_ready;
+    diagnostics->rtu_t15_violations =
+        receiver_diagnostics.t15_violations;
+    diagnostics->rtu_discarded_bytes =
+        receiver_diagnostics.discarded_bytes;
+    diagnostics->rtu_timestamp_errors =
+        receiver_diagnostics.timestamp_errors;
+    diagnostics->rtu_rx_errors = receiver_diagnostics.rx_errors;
+    diagnostics->unsupported_rx_blocks = modbus_unsupported_rx_blocks;
     return HAL_OK;
 }
 
@@ -517,21 +507,11 @@ const char *app_modbus_command_result_name(uint8_t result)
 
 static void app_modbus_task_entry(ULONG thread_input)
 {
-    uint32_t last_cycles = bsp_dwt_get_cycles();
-    uint32_t cycles_per_us = SystemCoreClock / 1000000U;
-
     (void)thread_input;
-    if (cycles_per_us == 0U)
-    {
-        cycles_per_us = 1U;
-    }
 
     while (1)
     {
         ULONG actual_flags;
-        uint32_t current_cycles = bsp_dwt_get_cycles();
-        uint32_t elapsed_cycles = current_cycles - last_cycles;
-        uint32_t elapsed_us = elapsed_cycles / cycles_per_us;
         ULONG now = tx_time_get();
 
         if (tx_event_flags_get(&modbus_control_events,
@@ -549,18 +529,13 @@ static void app_modbus_task_entry(ULONG thread_input)
             app_modbus_apply_pending_config();
         }
 
-        if (elapsed_us != 0U)
-        {
-            last_cycles += elapsed_us * cycles_per_us;
-            ldc_easy_tick_us(&modbus_queue, elapsed_us);
-        }
+        app_modbus_receiver_poll();
 
         if((modbus_active_transaction.stage ==
             APP_MODBUS_TRANSACTION_IDLE) &&
            app_h563_ota_master_has_pending() != 0U)
         {
             app_h563_ota_master_run_pending();
-            last_cycles = bsp_dwt_get_cycles();
             continue;
         }
 
@@ -571,9 +546,7 @@ static void app_modbus_task_entry(ULONG thread_input)
 
             do
             {
-                did_work = 0U;
-                (void)ld_modbus_ldc_rtu_server_poll(&modbus_server,
-                                                    &did_work);
+                did_work = app_modbus_slave_process_one();
                 if (did_work != 0U)
                 {
                     app_modbus_apply_outputs();
@@ -592,11 +565,27 @@ static void app_modbus_task_entry(ULONG thread_input)
 
 static void app_modbus_receive(const uint8_t *data,
                                uint16_t length,
+                               uint32_t end_timestamp_ticks,
+                               uint32_t event_flags,
                                void *argument)
 {
     (void)argument;
+    if ((event_flags & BSP_UART_RX_EVENT_ERROR_MASK) != 0U)
+    {
+        ld_modbus_rtu_framer_on_error(&modbus_receiver,
+                                      end_timestamp_ticks);
+        return;
+    }
     modbus_received_bytes += length;
-    (void)ldc_easy_add(&modbus_queue, data, length);
+    if ((event_flags != BSP_UART_RX_EVENT_DATA) ||
+        (data == NULL) || (length != 1U))
+    {
+        modbus_unsupported_rx_blocks++;
+        return;
+    }
+    ld_modbus_rtu_framer_on_byte(&modbus_receiver,
+                                  data[0],
+                                  end_timestamp_ticks);
 }
 
 static int app_modbus_send(void *user, const uint8_t *data, size_t length)
@@ -605,11 +594,10 @@ static int app_modbus_send(void *user, const uint8_t *data, size_t length)
     return (int)bsp_rs485_write(data, length);
 }
 
-static uint32_t app_modbus_ldc_lock(void *user)
+static uint32_t app_modbus_receiver_lock(void)
 {
     uint32_t interrupt_state = __get_PRIMASK();
 
-    (void)user;
     if ((__get_IPSR() == 0U) && (interrupt_state == 0U))
     {
         __disable_irq();
@@ -618,14 +606,95 @@ static uint32_t app_modbus_ldc_lock(void *user)
     return interrupt_state;
 }
 
-static void app_modbus_ldc_unlock(void *user, uint32_t interrupt_state)
+static void app_modbus_receiver_unlock(uint32_t interrupt_state)
 {
-    (void)user;
     if ((__get_IPSR() == 0U) && (interrupt_state == 0U))
     {
         __DMB();
         __enable_irq();
     }
+}
+
+/** @brief Serialize task-side T3.5 polling with the UART ISR producer. */
+static void app_modbus_receiver_poll(void)
+{
+    uint32_t state = app_modbus_receiver_lock();
+
+    if (bsp_rs485_receive_quiescent() != 0U)
+    {
+        ld_modbus_rtu_framer_poll(&modbus_receiver, bsp_dwt_get_cycles());
+    }
+    app_modbus_receiver_unlock(state);
+}
+
+/** @brief Claim ready metadata while keeping payload processing interruptible. */
+static uint8_t app_modbus_receiver_claim(ld_modbus_rtu_frame_view_t *view)
+{
+    uint32_t state = app_modbus_receiver_lock();
+    uint8_t claimed = ld_modbus_rtu_framer_claim(&modbus_receiver, view) ?
+                      1U : 0U;
+
+    app_modbus_receiver_unlock(state);
+    return claimed;
+}
+
+/** @brief Release a claimed frame under the short UART critical section. */
+static uint8_t app_modbus_receiver_release(ld_modbus_rtu_frame_view_t *view)
+{
+    uint32_t state = app_modbus_receiver_lock();
+    uint8_t released = ld_modbus_rtu_framer_release(&modbus_receiver, view) ?
+                       1U : 0U;
+
+    app_modbus_receiver_unlock(state);
+    return released;
+}
+
+/** @brief Process one dependency-free RTU frame as the configured slave. */
+static uint8_t app_modbus_slave_process_one(void)
+{
+    ld_modbus_rtu_frame_view_t request;
+    ld_modbus_server_action_t action;
+    ld_modbus_status_t status;
+    size_t response_length = 0U;
+
+    if(app_modbus_receiver_claim(&request) == 0U)
+    {
+        return 0U;
+    }
+    modbus_diagnostics.received_frames++;
+    status = ld_modbus_server_process_rtu_adu(
+        &modbus_map,
+        modbus_active_config.persistent.modbus_unit_id,
+        request.data,
+        request.length,
+        modbus_response,
+        sizeof(modbus_response),
+        &response_length,
+        &action);
+    if(app_modbus_receiver_release(&request) == 0U)
+    {
+        modbus_diagnostics.malformed_frames++;
+        return 1U;
+    }
+    if(status == LD_MODBUS_STATUS_BAD_CRC)
+    {
+        modbus_diagnostics.crc_errors++;
+        return 1U;
+    }
+    if(status != LD_MODBUS_STATUS_OK)
+    {
+        modbus_diagnostics.malformed_frames++;
+        return 1U;
+    }
+    if(action == LD_MODBUS_SERVER_ACTION_REPLY)
+    {
+        if(app_modbus_send(NULL, modbus_response, response_length) ==
+           (int)response_length)
+        {
+            modbus_diagnostics.replied_frames++;
+        }
+    }
+    return 1U;
 }
 
 static ULONG app_modbus_ms_to_ticks(uint32_t milliseconds)
@@ -693,7 +762,6 @@ static void app_modbus_apply_pending_config(void)
     config = modbus_pending_config;
     modbus_active_config = config;
     modbus_config_pending = 0U;
-    modbus_server.unit_id = config.persistent.modbus_unit_id;
     modbus_coils[0] = config.red_led_on;
     modbus_coils[1] = config.buzzer_on;
     modbus_command_head = 0U;
@@ -769,14 +837,11 @@ static void app_modbus_reset_master_runtime(ULONG now)
 
 static void app_modbus_clear_receive_queue(void)
 {
-    uint8_t discarded[LD_MODBUS_RTU_MAX_ADU_LENGTH];
+    uint32_t state;
 
-    while (ldc_easy_pop(&modbus_queue,
-                        discarded,
-                        sizeof(discarded)) > 0)
-    {
-    }
-    (void)ldc_easy_abort(&modbus_queue);
+    state = app_modbus_receiver_lock();
+    (void)ld_modbus_rtu_framer_reset(&modbus_receiver);
+    app_modbus_receiver_unlock(state);
 }
 
 static void app_modbus_apply_outputs(void)
@@ -810,27 +875,24 @@ static void app_modbus_apply_outputs(void)
 
 static void app_modbus_update_slave_inputs(void)
 {
-    ld_modbus_ldc_diagnostics_t diagnostics;
-    ldc_stats_t ldc_stats;
+    ld_modbus_rtu_framer_diag_t receiver_diagnostics;
+    uint32_t receiver_state;
 
-    if (ld_modbus_ldc_rtu_server_get_diagnostics(
-            &modbus_server,
-            &diagnostics) == LD_MODBUS_STATUS_OK)
-    {
-        modbus_input_registers[2] =
-            (uint16_t)diagnostics.received_frames;
-        modbus_input_registers[3] =
-            (uint16_t)diagnostics.replied_frames;
-        modbus_input_registers[4] =
-            (uint16_t)diagnostics.crc_errors;
-        modbus_input_registers[5] =
-            (uint16_t)diagnostics.malformed_frames;
-    }
-    if (ldc_easy_get_stats(&modbus_queue, &ldc_stats))
-    {
-        modbus_input_registers[6] = (uint16_t)ldc_stats.overflow;
-        modbus_input_registers[7] = (uint16_t)ldc_stats.drop;
-    }
+    receiver_state = app_modbus_receiver_lock();
+    receiver_diagnostics = modbus_receiver.diag;
+    app_modbus_receiver_unlock(receiver_state);
+    modbus_input_registers[2] =
+        (uint16_t)modbus_diagnostics.received_frames;
+    modbus_input_registers[3] =
+        (uint16_t)modbus_diagnostics.replied_frames;
+    modbus_input_registers[4] =
+        (uint16_t)modbus_diagnostics.crc_errors;
+    modbus_input_registers[5] =
+        (uint16_t)modbus_diagnostics.malformed_frames;
+    modbus_input_registers[6] =
+        (uint16_t)receiver_diagnostics.overflow;
+    modbus_input_registers[7] =
+        (uint16_t)receiver_diagnostics.dropped_while_ready;
 }
 
 static uint8_t app_modbus_select_due_poll(ULONG now,
@@ -1120,21 +1182,21 @@ static void app_modbus_master_run(ULONG now)
 
 static void app_modbus_master_process_frames(ULONG now)
 {
-    int32_t length;
+    ld_modbus_rtu_frame_view_t frame;
+    uint8_t claimed;
 
     do
     {
-        length = ldc_easy_pop(&modbus_queue,
-                              modbus_response,
-                              sizeof(modbus_response));
-        if (length > 0)
+        claimed = app_modbus_receiver_claim(&frame);
+        if (claimed != 0U)
         {
             modbus_diagnostics.received_frames++;
-            app_modbus_master_process_frame(modbus_response,
-                                            (size_t)length,
+            app_modbus_master_process_frame(frame.data,
+                                            frame.length,
                                             now);
+            (void)app_modbus_receiver_release(&frame);
         }
-    } while ((length > 0) &&
+    } while ((claimed != 0U) &&
              (modbus_active_transaction.stage !=
               APP_MODBUS_TRANSACTION_IDLE));
 }

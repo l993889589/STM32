@@ -1,3 +1,8 @@
+/**
+ * @file bsp_w25q128.h
+ * @brief ART-Pi H750 SPI W25Q128 BSP interface.
+ */
+
 #ifndef BSP_W25Q128_H
 #define BSP_W25Q128_H
 

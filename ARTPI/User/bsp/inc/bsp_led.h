@@ -1,3 +1,8 @@
+/**
+ * @file bsp_led.h
+ * @brief ART-Pi H750 LED BSP interface.
+ */
+
 #ifndef BSP_LED_H
 #define BSP_LED_H
 
@@ -17,4 +22,3 @@ void bsp_led_toggle(bsp_led_t led);
 uint8_t bsp_led_is_on(bsp_led_t led);
 
 #endif
-

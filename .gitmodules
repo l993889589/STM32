@@ -4,3 +4,18 @@
 [submodule "ARTPI/ldc"]
 	path = ARTPI/ldc
 	url = https://github.com/l993889589/ldc.git
+[submodule "projects/stm32h563-h5/STM32H563RIV6_app/Middlewares/ldc"]
+	path = projects/stm32h563-h5/STM32H563RIV6_app/Middlewares/ldc
+	url = https://github.com/l993889589/ldc.git
+[submodule "projects/stm32h563-h5/STM32H563RIV6_app/Middlewares/ld_modbus"]
+	path = projects/stm32h563-h5/STM32H563RIV6_app/Middlewares/ld_modbus
+	url = https://github.com/l993889589/ld_modbus.git
+[submodule "projects/chpm/chpm/third_party/ldc"]
+	path = projects/chpm/chpm/third_party/ldc
+	url = https://github.com/l993889589/ldc.git
+[submodule "projects/chpm/chpm/third_party/ld_modbus"]
+	path = projects/chpm/chpm/third_party/ld_modbus
+	url = https://github.com/l993889589/ld_modbus.git
+[submodule "projects/stm32h563-h5/STM32H563RIV6_app/user/ui/lvgl/lvgl"]
+	path = projects/stm32h563-h5/STM32H563RIV6_app/user/ui/lvgl/lvgl
+	url = https://github.com/lvgl/lvgl.git

@@ -1,3 +1,8 @@
+/**
+ * @file bsp_eth.c
+ * @brief ART-Pi H750 Ethernet BSP implementation.
+ */
+
 #include "bsp.h"
 
 #include <string.h>
@@ -39,6 +44,7 @@ static uint8_t eth_rx_buffers[ETH_RX_DESC_CNT][BSP_ETH_RX_BUFFER_SIZE];
 static HAL_StatusTypeDef bsp_eth_find_phy(void);
 static void bsp_eth_reset_phy(void);
 
+/** @brief Perform the bsp_eth_init board-support operation. */
 HAL_StatusTypeDef bsp_eth_init(void)
 {
     uint32_t index;
@@ -100,6 +106,7 @@ HAL_StatusTypeDef bsp_eth_init(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_eth_start board-support operation. */
 HAL_StatusTypeDef bsp_eth_start(void)
 {
     HAL_StatusTypeDef status;
@@ -121,6 +128,7 @@ HAL_StatusTypeDef bsp_eth_start(void)
     return status;
 }
 
+/** @brief Perform the bsp_eth_stop board-support operation. */
 HAL_StatusTypeDef bsp_eth_stop(void)
 {
     HAL_StatusTypeDef status;
@@ -138,6 +146,7 @@ HAL_StatusTypeDef bsp_eth_stop(void)
     return status;
 }
 
+/** @brief Perform the bsp_eth_transmit board-support operation. */
 HAL_StatusTypeDef bsp_eth_transmit(const uint8_t *frame, uint32_t length)
 {
     ETH_BufferTypeDef buffer = {0};
@@ -189,6 +198,7 @@ HAL_StatusTypeDef bsp_eth_transmit(const uint8_t *frame, uint32_t length)
     return status;
 }
 
+/** @brief Perform the bsp_eth_receive board-support operation. */
 HAL_StatusTypeDef bsp_eth_receive(uint8_t *frame,
                                   uint32_t capacity,
                                   uint32_t *length)
@@ -250,6 +260,7 @@ HAL_StatusTypeDef bsp_eth_receive(uint8_t *frame,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_eth_get_link board-support operation. */
 HAL_StatusTypeDef bsp_eth_get_link(bsp_eth_link_t *link)
 {
     uint32_t basic_status;
@@ -293,6 +304,7 @@ HAL_StatusTypeDef bsp_eth_get_link(bsp_eth_link_t *link)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_eth_apply_link board-support operation. */
 HAL_StatusTypeDef bsp_eth_apply_link(const bsp_eth_link_t *link)
 {
     ETH_MACConfigTypeDef config = {0};
@@ -312,6 +324,7 @@ HAL_StatusTypeDef bsp_eth_apply_link(const bsp_eth_link_t *link)
     return HAL_ETH_SetMACConfig(&eth_handle, &config);
 }
 
+/** @brief Perform the bsp_eth_get_mac_address board-support operation. */
 void bsp_eth_get_mac_address(uint8_t address[6])
 {
     if (address != NULL)
@@ -320,11 +333,13 @@ void bsp_eth_get_mac_address(uint8_t address[6])
     }
 }
 
+/** @brief Perform the bsp_eth_get_phy_address board-support operation. */
 uint32_t bsp_eth_get_phy_address(void)
 {
     return eth_phy_address;
 }
 
+/** @brief Perform the bsp_eth_set_rx_callback board-support operation. */
 void bsp_eth_set_rx_callback(bsp_eth_rx_callback_t callback, void *argument)
 {
     uint32_t interrupt_state = __get_PRIMASK();
@@ -338,6 +353,7 @@ void bsp_eth_set_rx_callback(bsp_eth_rx_callback_t callback, void *argument)
     }
 }
 
+/** @brief Perform the bsp_eth_get_diagnostics board-support operation. */
 void bsp_eth_get_diagnostics(bsp_eth_diagnostics_t *diagnostics)
 {
     if (diagnostics != NULL)
@@ -346,11 +362,13 @@ void bsp_eth_get_diagnostics(bsp_eth_diagnostics_t *diagnostics)
     }
 }
 
+/** @brief Perform the bsp_eth_irq_handler board-support operation. */
 void bsp_eth_irq_handler(void)
 {
     HAL_ETH_IRQHandler(&eth_handle);
 }
 
+/** @brief Handle the HAL_ETH_MspInit HAL callback. */
 void HAL_ETH_MspInit(ETH_HandleTypeDef *handle)
 {
     GPIO_InitTypeDef gpio = {0};
@@ -383,6 +401,7 @@ void HAL_ETH_MspInit(ETH_HandleTypeDef *handle)
     HAL_NVIC_EnableIRQ(ETH_IRQn);
 }
 
+/** @brief Handle the HAL_ETH_RxCpltCallback HAL callback. */
 void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *handle)
 {
     if ((handle == &eth_handle) && (eth_rx_callback != NULL))
@@ -391,6 +410,7 @@ void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *handle)
     }
 }
 
+/** @brief Handle the HAL_ETH_DMAErrorCallback HAL callback. */
 void HAL_ETH_DMAErrorCallback(ETH_HandleTypeDef *handle)
 {
     if (handle == &eth_handle)
@@ -399,6 +419,7 @@ void HAL_ETH_DMAErrorCallback(ETH_HandleTypeDef *handle)
     }
 }
 
+/** @brief Perform the bsp_eth_find_phy board-support operation. */
 static HAL_StatusTypeDef bsp_eth_find_phy(void)
 {
     uint32_t address;
@@ -426,6 +447,7 @@ static HAL_StatusTypeDef bsp_eth_find_phy(void)
     return HAL_ERROR;
 }
 
+/** @brief Perform the bsp_eth_reset_phy board-support operation. */
 static void bsp_eth_reset_phy(void)
 {
     GPIO_InitTypeDef gpio = {0};

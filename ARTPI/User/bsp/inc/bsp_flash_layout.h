@@ -1,3 +1,8 @@
+/**
+ * @file bsp_flash_layout.h
+ * @brief ART-Pi H750 external-flash layout contract.
+ */
+
 #ifndef BSP_FLASH_LAYOUT_H
 #define BSP_FLASH_LAYOUT_H
 

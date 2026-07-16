@@ -1,3 +1,8 @@
+/**
+ * @file bsp_sdio_wifi.c
+ * @brief ART-Pi H750 SDIO Wi-Fi BSP implementation.
+ */
+
 #include "bsp.h"
 
 #include <string.h>
@@ -50,6 +55,7 @@ static HAL_StatusTypeDef bsp_sdio_wifi_transfer_extended(uint8_t write,
 static uint16_t bsp_sdio_wifi_optimal_byte_block_size(uint16_t data_size);
 static uint32_t bsp_sdio_wifi_data_block_size(uint16_t block_size);
 
+/** @brief Perform the bsp_sdio_wifi_init board-support operation. */
 HAL_StatusTypeDef bsp_sdio_wifi_init(void)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -84,6 +90,7 @@ HAL_StatusTypeDef bsp_sdio_wifi_init(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_sdio_wifi_probe board-support operation. */
 HAL_StatusTypeDef bsp_sdio_wifi_probe(bsp_sdio_wifi_probe_result_t *result)
 {
     HAL_StatusTypeDef status;
@@ -201,6 +208,7 @@ HAL_StatusTypeDef bsp_sdio_wifi_probe(bsp_sdio_wifi_probe_result_t *result)
     return status;
 }
 
+/** @brief Perform the bsp_sdio_wifi_transfer board-support operation. */
 HAL_StatusTypeDef bsp_sdio_wifi_transfer(uint8_t write,
                                          uint8_t function,
                                          uint32_t address,
@@ -229,6 +237,7 @@ HAL_StatusTypeDef bsp_sdio_wifi_transfer(uint8_t write,
                                             function_block_size);
 }
 
+/** @brief Perform the bsp_sdio_wifi_set_high_speed board-support operation. */
 HAL_StatusTypeDef bsp_sdio_wifi_set_high_speed(void)
 {
     SDMMC_InitTypeDef config = {0};
@@ -250,6 +259,7 @@ HAL_StatusTypeDef bsp_sdio_wifi_set_high_speed(void)
     return SDMMC_Init(SDMMC2, config);
 }
 
+/** @brief Perform the bsp_sdio_wifi_set_power board-support operation. */
 void bsp_sdio_wifi_set_power(uint8_t enabled)
 {
     HAL_GPIO_WritePin(GPIOC,
@@ -257,11 +267,13 @@ void bsp_sdio_wifi_set_power(uint8_t enabled)
                       (enabled != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
+/** @brief Perform the bsp_sdio_wifi_set_oob_callback board-support operation. */
 void bsp_sdio_wifi_set_oob_callback(bsp_sdio_wifi_oob_callback_t callback)
 {
     oob_callback = callback;
 }
 
+/** @brief Perform the bsp_sdio_wifi_enable_oob_interrupt board-support operation. */
 void bsp_sdio_wifi_enable_oob_interrupt(uint8_t enabled)
 {
     if (enabled != 0U)
@@ -279,6 +291,7 @@ void bsp_sdio_wifi_enable_oob_interrupt(uint8_t enabled)
     }
 }
 
+/** @brief Perform the bsp_sdio_wifi_oob_irq_handler board-support operation. */
 void bsp_sdio_wifi_oob_irq_handler(void)
 {
     if (__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_3) != 0U)
@@ -292,16 +305,19 @@ void bsp_sdio_wifi_oob_irq_handler(void)
     }
 }
 
+/** @brief Perform the bsp_sdio_wifi_get_oob_interrupt_count board-support operation. */
 uint32_t bsp_sdio_wifi_get_oob_interrupt_count(void)
 {
     return oob_interrupt_count;
 }
 
+/** @brief Perform the bsp_sdio_wifi_get_oob_level board-support operation. */
 uint8_t bsp_sdio_wifi_get_oob_level(void)
 {
     return (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_3) == GPIO_PIN_SET) ? 1U : 0U;
 }
 
+/** @brief Perform the bsp_sdio_wifi_get_clock board-support operation. */
 uint32_t bsp_sdio_wifi_get_clock(void)
 {
     uint32_t kernel_clock = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SDMMC);
@@ -315,6 +331,7 @@ uint32_t bsp_sdio_wifi_get_clock(void)
     return kernel_clock / (2U * divider);
 }
 
+/** @brief Perform the bsp_sdio_wifi_clock_init board-support operation. */
 static HAL_StatusTypeDef bsp_sdio_wifi_clock_init(void)
 {
     RCC_PeriphCLKInitTypeDef clock_config = {0};
@@ -361,6 +378,7 @@ static HAL_StatusTypeDef bsp_sdio_wifi_clock_init(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_sdio_wifi_gpio_init board-support operation. */
 static void bsp_sdio_wifi_gpio_init(void)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -392,6 +410,7 @@ static void bsp_sdio_wifi_gpio_init(void)
     HAL_NVIC_DisableIRQ(EXTI3_IRQn);
 }
 
+/** @brief Perform the bsp_sdio_wifi_send_command board-support operation. */
 static HAL_StatusTypeDef bsp_sdio_wifi_send_command(uint32_t command_index,
                                                     uint32_t argument,
                                                     uint32_t response_type,
@@ -454,6 +473,7 @@ static HAL_StatusTypeDef bsp_sdio_wifi_send_command(uint32_t command_index,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_sdio_wifi_read_direct board-support operation. */
 static HAL_StatusTypeDef bsp_sdio_wifi_read_direct(uint8_t function,
                                                   uint32_t address,
                                                   uint8_t *value)
@@ -487,6 +507,7 @@ static HAL_StatusTypeDef bsp_sdio_wifi_read_direct(uint8_t function,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_sdio_wifi_write_direct board-support operation. */
 static HAL_StatusTypeDef bsp_sdio_wifi_write_direct(uint8_t function,
                                                     uint32_t address,
                                                     uint8_t value)
@@ -512,6 +533,7 @@ static HAL_StatusTypeDef bsp_sdio_wifi_write_direct(uint8_t function,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_sdio_wifi_transfer_extended board-support operation. */
 static HAL_StatusTypeDef bsp_sdio_wifi_transfer_extended(uint8_t write,
                                                          uint8_t function,
                                                          uint32_t address,
@@ -646,6 +668,7 @@ transfer_exit:
     return status;
 }
 
+/** @brief Perform the bsp_sdio_wifi_optimal_byte_block_size board-support operation. */
 static uint16_t bsp_sdio_wifi_optimal_byte_block_size(uint16_t data_size)
 {
     uint16_t block_size = 4U;
@@ -657,6 +680,7 @@ static uint16_t bsp_sdio_wifi_optimal_byte_block_size(uint16_t data_size)
     return block_size;
 }
 
+/** @brief Perform the bsp_sdio_wifi_data_block_size board-support operation. */
 static uint32_t bsp_sdio_wifi_data_block_size(uint16_t block_size)
 {
     switch (block_size)

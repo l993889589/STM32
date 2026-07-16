@@ -1,3 +1,8 @@
+/**
+ * @file bsp_tim_pwm.h
+ * @brief ART-Pi H750 timer PWM BSP interface.
+ */
+
 #ifndef BSP_TIM_PWM_H
 #define BSP_TIM_PWM_H
 

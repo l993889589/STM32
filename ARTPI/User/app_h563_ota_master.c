@@ -31,11 +31,36 @@ typedef enum
 } app_h563_ota_exchange_result_t;
 
 static TX_MUTEX app_h563_ota_master_mutex;
-static ldc_easy_t *app_h563_ota_receive_queue;
+static ld_modbus_rtu_framer_t *app_h563_ota_receiver;
+static uint8_t app_h563_ota_bits_per_char;
+static uint32_t app_h563_ota_timestamp_hz;
 static app_h563_ota_master_status_t app_h563_ota_master_status;
 static uint8_t app_h563_ota_master_initialized;
 static uint8_t app_h563_ota_master_pending;
 static uint8_t app_h563_ota_master_running;
+
+/** @brief Replace RTU timing while the BSP keeps the UART IRQ masked. */
+static void app_h563_ota_sync_receiver_baud(uint32_t active_baud_rate,
+                                             void *argument)
+{
+    uint32_t interrupt_state = __get_PRIMASK();
+
+    (void)argument;
+    if(interrupt_state == 0U)
+    {
+        __disable_irq();
+        __DMB();
+    }
+    (void)ld_modbus_rtu_framer_reconfigure(app_h563_ota_receiver,
+                                            active_baud_rate,
+                                            app_h563_ota_bits_per_char,
+                                            app_h563_ota_timestamp_hz);
+    if(interrupt_state == 0U)
+    {
+        __DMB();
+        __enable_irq();
+    }
+}
 
 static uint32_t app_h563_ota_now_ms(void)
 {
@@ -94,27 +119,96 @@ static void app_h563_ota_count_retry(void)
 
 static void app_h563_ota_clear_receive_queue(void)
 {
-    uint8_t discarded[LD_MODBUS_RTU_MAX_ADU_LENGTH];
+    uint32_t interrupt_state = __get_PRIMASK();
 
-    while(ldc_easy_pop(app_h563_ota_receive_queue,
-                       discarded,
-                       sizeof(discarded)) > 0)
+    if(interrupt_state == 0U)
     {
+        __disable_irq();
+        __DMB();
     }
-    (void)ldc_easy_abort(app_h563_ota_receive_queue);
+    (void)ld_modbus_rtu_framer_reset(app_h563_ota_receiver);
+    if(interrupt_state == 0U)
+    {
+        __DMB();
+        __enable_irq();
+    }
 }
 
-static void app_h563_ota_tick_receive_queue(uint32_t *last_cycles,
-                                             uint32_t cycles_per_us)
+static void app_h563_ota_poll_receive_queue(void)
 {
-    uint32_t current_cycles = bsp_dwt_get_cycles();
-    uint32_t elapsed_cycles = current_cycles - *last_cycles;
-    uint32_t elapsed_us = elapsed_cycles / cycles_per_us;
+    uint32_t interrupt_state = __get_PRIMASK();
 
-    if(elapsed_us != 0U)
+    if(interrupt_state == 0U)
     {
-        *last_cycles += elapsed_us * cycles_per_us;
-        ldc_easy_tick_us(app_h563_ota_receive_queue, elapsed_us);
+        __disable_irq();
+        __DMB();
+    }
+    if(bsp_rs485_receive_quiescent() != 0U)
+    {
+        ld_modbus_rtu_framer_poll(app_h563_ota_receiver,
+                                  bsp_dwt_get_cycles());
+    }
+    if(interrupt_state == 0U)
+    {
+        __DMB();
+        __enable_irq();
+    }
+}
+
+static HAL_StatusTypeDef app_h563_ota_set_baud_rate(uint32_t baud_rate)
+{
+    ld_modbus_rtu_timing_t validated_timing;
+
+    if(!ld_modbus_rtu_timing_init(&validated_timing,
+                                  baud_rate,
+                                  app_h563_ota_bits_per_char,
+                                  app_h563_ota_timestamp_hz))
+    {
+        return HAL_ERROR;
+    }
+    return bsp_uart_set_baud_rate_synchronized(
+        BSP_RS485_UART_PORT,
+        baud_rate,
+        app_h563_ota_sync_receiver_baud,
+        NULL);
+}
+
+/** @brief Claim ready receiver metadata under a short UART critical section. */
+static uint8_t app_h563_ota_claim_frame(ld_modbus_rtu_frame_view_t *view)
+{
+    uint32_t interrupt_state = __get_PRIMASK();
+    uint8_t claimed;
+
+    if(interrupt_state == 0U)
+    {
+        __disable_irq();
+        __DMB();
+    }
+    claimed = ld_modbus_rtu_framer_claim(app_h563_ota_receiver, view) ?
+              1U : 0U;
+    if(interrupt_state == 0U)
+    {
+        __DMB();
+        __enable_irq();
+    }
+    return claimed;
+}
+
+/** @brief Release a claimed receiver frame under the same short lock. */
+static void app_h563_ota_release_frame(ld_modbus_rtu_frame_view_t *view)
+{
+    uint32_t interrupt_state = __get_PRIMASK();
+
+    if(interrupt_state == 0U)
+    {
+        __disable_irq();
+        __DMB();
+    }
+    (void)ld_modbus_rtu_framer_release(app_h563_ota_receiver, view);
+    if(interrupt_state == 0U)
+    {
+        __DMB();
+        __enable_irq();
     }
 }
 
@@ -126,15 +220,9 @@ static app_h563_ota_exchange_result_t app_h563_ota_exchange(
 {
     uint8_t pdu[OTA_MODBUS_MAX_PDU_SIZE];
     uint8_t frame[LD_MODBUS_RTU_MAX_ADU_LENGTH];
-    uint8_t received_frame[LD_MODBUS_RTU_MAX_ADU_LENGTH];
     size_t pdu_length;
     size_t frame_length;
     ULONG deadline;
-    uint32_t last_cycles;
-    uint32_t cycles_per_us = SystemCoreClock / 1000000U;
-
-    if(cycles_per_us == 0U)
-        cycles_per_us = 1U;
     if(ota_modbus_encode_request(request,
                                   pdu,
                                   sizeof(pdu),
@@ -161,21 +249,18 @@ static app_h563_ota_exchange_result_t app_h563_ota_exchange(
         (void)tx_thread_sleep(1U);
     }
 
-    last_cycles = bsp_dwt_get_cycles();
     while(app_h563_ota_time_reached(tx_time_get(), deadline) == 0U)
     {
-        int length;
+        ld_modbus_rtu_frame_view_t received_frame;
 
-        app_h563_ota_tick_receive_queue(&last_cycles, cycles_per_us);
-        length = ldc_easy_pop(app_h563_ota_receive_queue,
-                              received_frame,
-                              sizeof(received_frame));
-        if(length > 0)
+        app_h563_ota_poll_receive_queue();
+        if(app_h563_ota_claim_frame(&received_frame) != 0U)
         {
             ld_modbus_adu_view_t view;
+            uint8_t matched = 0U;
 
-            if(ld_modbus_rtu_decode(received_frame,
-                                    (size_t)length,
+            if(ld_modbus_rtu_decode(received_frame.data,
+                                    received_frame.length,
                                     &view) == LD_MODBUS_STATUS_OK &&
                view.unit_id == unit_id &&
                ota_modbus_decode_response(view.pdu,
@@ -183,6 +268,11 @@ static app_h563_ota_exchange_result_t app_h563_ota_exchange(
                                            response) == OTA_MODBUS_CODEC_OK &&
                response->command == request->command &&
                response->session_id == request->session_id)
+            {
+                matched = 1U;
+            }
+            app_h563_ota_release_frame(&received_frame);
+            if(matched != 0U)
             {
                 if(response->status != OTA_MODBUS_STATUS_OK)
                 {
@@ -256,7 +346,7 @@ static uint8_t app_h563_ota_change_baud(uint8_t unit_id,
     (void)tx_thread_sleep(app_h563_ota_ms_to_ticks(
         (uint32_t)response.switch_delay_ms + 5U));
     app_h563_ota_clear_receive_queue();
-    if(bsp_uart_set_baud_rate(BSP_RS485_UART_PORT, baud_rate) != HAL_OK)
+    if(app_h563_ota_set_baud_rate(baud_rate) != HAL_OK)
         return 0U;
 
     for(pass = 0U; pass < APP_H563_OTA_SYNC_PASSES; pass++)
@@ -368,8 +458,7 @@ static uint8_t app_h563_ota_execute(uint8_t unit_id,
     if(bsp_uart_get_baud_rate(BSP_RS485_UART_PORT) !=
        APP_H563_OTA_BASE_BAUD_RATE)
     {
-        if(bsp_uart_set_baud_rate(BSP_RS485_UART_PORT,
-                                  APP_H563_OTA_BASE_BAUD_RATE) != HAL_OK)
+        if(app_h563_ota_set_baud_rate(APP_H563_OTA_BASE_BAUD_RATE) != HAL_OK)
         {
             return APP_H563_OTA_RESULT_BAUD;
         }
@@ -473,11 +562,15 @@ static uint8_t app_h563_ota_execute(uint8_t unit_id,
     return APP_H563_OTA_RESULT_OK;
 }
 
-HAL_StatusTypeDef app_h563_ota_master_init(ldc_easy_t *receive_queue)
+HAL_StatusTypeDef app_h563_ota_master_init(
+    ld_modbus_rtu_framer_t *receiver,
+    uint8_t bits_per_char,
+    uint32_t timestamp_hz)
 {
     if(app_h563_ota_master_initialized != 0U)
         return HAL_OK;
-    if(receive_queue == NULL ||
+    if(receiver == NULL || bits_per_char == 0U ||
+       timestamp_hz == 0U ||
        tx_mutex_create(&app_h563_ota_master_mutex,
                        "h563_ota_master",
                        TX_INHERIT) != TX_SUCCESS ||
@@ -488,7 +581,9 @@ HAL_StatusTypeDef app_h563_ota_master_init(ldc_easy_t *receive_queue)
 
     memset(&app_h563_ota_master_status, 0,
            sizeof(app_h563_ota_master_status));
-    app_h563_ota_receive_queue = receive_queue;
+    app_h563_ota_receiver = receiver;
+    app_h563_ota_bits_per_char = bits_per_char;
+    app_h563_ota_timestamp_hz = timestamp_hz;
     app_h563_ota_master_initialized = 1U;
     return HAL_OK;
 }
@@ -575,8 +670,10 @@ void app_h563_ota_master_run_pending(void)
     result = app_h563_ota_execute(unit_id,
                                   preferred_baud_rate,
                                   session_id);
-    (void)bsp_uart_set_baud_rate(BSP_RS485_UART_PORT,
-                                 APP_H563_OTA_BASE_BAUD_RATE);
+    if(app_h563_ota_set_baud_rate(APP_H563_OTA_BASE_BAUD_RATE) != HAL_OK)
+    {
+        result = APP_H563_OTA_RESULT_BAUD;
+    }
     app_h563_ota_clear_receive_queue();
     (void)app_h563_ota_cache_set_transferring(0U);
 

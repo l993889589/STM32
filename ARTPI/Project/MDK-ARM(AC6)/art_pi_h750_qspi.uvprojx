@@ -341,7 +341,7 @@
               <MiscControls>-Wno-invalid-source-encoding</MiscControls>
               <Define>USE_HAL_DRIVER,STM32H750xx,ART_PI_QSPI_APP=1,TX_ENABLE_FPU_SUPPORT,TX_INCLUDE_USER_DEFINE_FILE,NX_INCLUDE_USER_DEFINE_FILE</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\..\art_pi_h750_common\gateway_ota;..\..\ldc;..\..\ld_modbus\include;..\..\ld_modbus\integrations\ldc;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc;..\..\NetXDuo\ports\cortex_m7\ac5\inc;..\..\NetXDuo\common\inc;..\..\NetXDuo\addons\dhcp</IncludePath>
+              <IncludePath>..\..\Libraries\CMSIS\Include;..\..\Libraries\CMSIS\Device\ST\STM32H7xx\Include;..\..\Libraries\STM32H7xx_HAL_Driver\Inc;..\..\User\bsp\inc;..\..\User\ap6212\inc;..\..\User;..\..\User\bsp;..\..\..\art_pi_h750_common\gateway_ota;..\..\ldc;..\..\ld_modbus\include;..\..\ThreadX\common\inc;..\..\ThreadX\ports\cortex_m7\ac6\inc;..\..\NetXDuo\ports\cortex_m7\ac5\inc;..\..\NetXDuo\common\inc;..\..\NetXDuo\addons\dhcp</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -726,34 +726,14 @@
           <GroupName>LDC</GroupName>
           <Files>
             <File>
-              <FileName>ldc_core.c</FileName>
+              <FileName>ldc.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\ldc\ldc_core.c</FilePath>
+              <FilePath>..\..\ldc\ldc.c</FilePath>
             </File>
             <File>
-              <FileName>ldc_easy.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ldc\ldc_easy.c</FilePath>
-            </File>
-            <File>
-              <FileName>ldc_packet.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ldc\ldc_packet.c</FilePath>
-            </File>
-            <File>
-              <FileName>ldc_ring.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ldc\ldc_ring.c</FilePath>
-            </File>
-            <File>
-              <FileName>ldc_core.h</FileName>
+              <FileName>ldc.h</FileName>
               <FileType>5</FileType>
-              <FilePath>..\..\ldc\ldc_core.h</FilePath>
-            </File>
-            <File>
-              <FileName>ldc_easy.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\..\ldc\ldc_easy.h</FilePath>
+              <FilePath>..\..\ldc\ldc.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -781,11 +761,6 @@
               <FilePath>..\..\ld_modbus\src\ld_modbus_server.c</FilePath>
             </File>
             <File>
-              <FileName>ld_modbus_ldc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\ld_modbus\integrations\ldc\ld_modbus_ldc.c</FilePath>
-            </File>
-            <File>
               <FileName>ld_modbus.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\ld_modbus\include\ld_modbus.h</FilePath>
@@ -794,11 +769,6 @@
               <FileName>ld_modbus_server.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\ld_modbus\include\ld_modbus_server.h</FilePath>
-            </File>
-            <File>
-              <FileName>ld_modbus_ldc.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\..\ld_modbus\integrations\ldc\ld_modbus_ldc.h</FilePath>
             </File>
           </Files>
         </Group>

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "ldc_easy.h"
+#include "ld_modbus_rtu_framer.h"
 #include "stm32h7xx_hal.h"
 
 typedef enum
@@ -48,7 +48,10 @@ typedef struct
     uint32_t finished_ms;
 } app_h563_ota_master_status_t;
 
-HAL_StatusTypeDef app_h563_ota_master_init(ldc_easy_t *receive_queue);
+HAL_StatusTypeDef app_h563_ota_master_init(
+    ld_modbus_rtu_framer_t *receiver,
+    uint8_t bits_per_char,
+    uint32_t timestamp_hz);
 HAL_StatusTypeDef app_h563_ota_master_request(uint8_t unit_id,
                                               uint32_t preferred_baud_rate);
 uint8_t app_h563_ota_master_has_pending(void);

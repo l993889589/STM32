@@ -1,3 +1,8 @@
+/**
+ * @file bsp_tim_pwm.c
+ * @brief ART-Pi H750 timer PWM BSP implementation.
+ */
+
 #include "bsp.h"
 
 #define BSP_TIM_PWM_INSTANCE  TIM5
@@ -11,6 +16,7 @@ static uint8_t tim_pwm_initialized;
 
 static uint32_t bsp_tim_pwm_get_clock(void);
 
+/** @brief Perform the bsp_tim_pwm_init board-support operation. */
 HAL_StatusTypeDef bsp_tim_pwm_init(void)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -30,6 +36,7 @@ HAL_StatusTypeDef bsp_tim_pwm_init(void)
     return bsp_tim_pwm_stop();
 }
 
+/** @brief Perform the bsp_tim_pwm_set board-support operation. */
 HAL_StatusTypeDef bsp_tim_pwm_set(uint32_t frequency_hz,
                                   uint16_t duty_permyriad)
 {
@@ -89,6 +96,7 @@ HAL_StatusTypeDef bsp_tim_pwm_set(uint32_t frequency_hz,
     return HAL_TIM_PWM_Start(&tim_pwm_handle, BSP_TIM_PWM_CHANNEL);
 }
 
+/** @brief Perform the bsp_tim_pwm_stop board-support operation. */
 HAL_StatusTypeDef bsp_tim_pwm_stop(void)
 {
     if (tim_pwm_initialized == 0U)
@@ -102,6 +110,7 @@ HAL_StatusTypeDef bsp_tim_pwm_stop(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_tim_pwm_get_clock board-support operation. */
 static uint32_t bsp_tim_pwm_get_clock(void)
 {
     uint32_t timer_clock = HAL_RCC_GetPCLK1Freq();

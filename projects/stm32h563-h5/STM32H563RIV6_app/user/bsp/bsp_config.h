@@ -1,0 +1,444 @@
+/**
+ * @file bsp_config.h
+ * @brief Compile-time STM32H563 board UART, GPIO, DMA, clock, and IRQ bindings.
+ *
+ * This private board-layer header is the source of truth for resources selected
+ * by the current PCB. It intentionally does not describe every alternate pin
+ * offered by the MCU datasheet.
+ */
+
+#ifndef BOARD_RESOURCES_H
+#define BOARD_RESOURCES_H
+
+#include "stm32h5xx_hal.h"
+
+#if !defined(STM32H563xx)
+#error "bsp_config.h requires the STM32H563xx device target"
+#endif
+
+#if !defined(GPDMA1_REQUEST_USART1_RX) || \
+    !defined(GPDMA1_REQUEST_USART2_RX) || \
+    !defined(GPDMA1_REQUEST_USART3_RX) || \
+    !defined(GPDMA1_REQUEST_UART4_RX) || \
+    !defined(GPDMA1_REQUEST_SPI2_TX)
+#error "The selected STM32H5 HAL does not expose all board UART DMA requests"
+#endif
+
+/** @brief Exact MCU order code fitted to the documented core board. */
+#define BOARD_MCU_ORDER_CODE                    "STM32H563RIV6"
+/** @brief Number of USART-capable controllers reported for STM32H563RI. */
+#define BOARD_MCU_USART_COUNT                   (5U)
+/** @brief Number of UART-only controllers reported for STM32H563RI. */
+#define BOARD_MCU_UART_COUNT                    (5U)
+/** @brief Number of low-power UART controllers reported for STM32H563RI. */
+#define BOARD_MCU_LPUART_COUNT                  (1U)
+
+/** @brief Encode one GPIO pin as a value usable by compile-time conflict checks. */
+#define BOARD_GPIO_RESOURCE_ID(port_id, pin_id) (((port_id) * 16U) + (pin_id))
+#define BOARD_GPIO_PORT_A_ID                    (0U)
+#define BOARD_GPIO_PORT_B_ID                    (1U)
+#define BOARD_GPIO_PORT_C_ID                    (2U)
+#define BOARD_GPIO_PORT_D_ID                    (3U)
+#define BOARD_GPIO_PORT_E_ID                    (4U)
+#define BOARD_GPIO_PORT_H_ID                    (7U)
+#define BOARD_GPIO_PIN_MASK(pin_id)             (1UL << (pin_id))
+
+/** @brief Board and clock identity retained independently of the CubeMX file. */
+#define BOARD_NAME                              "dshan_h563_industrial"
+#define BOARD_HSE_FREQUENCY_HZ                  (25000000UL)
+#define BOARD_LSE_FREQUENCY_HZ                  (32768UL)
+#define BOARD_EXPECTED_SYSCLK_HZ                (250000000UL)
+
+/* Debug and oscillator pins are reserved even though normal BSP code does not drive them. */
+#define BOARD_DEBUG_SWDIO_RESOURCE_MASK         BOARD_GPIO_PIN_MASK(13U)
+#define BOARD_DEBUG_SWCLK_RESOURCE_MASK         BOARD_GPIO_PIN_MASK(14U)
+#define BOARD_DEBUG_SWO_RESOURCE_MASK           BOARD_GPIO_PIN_MASK(3U)
+#define BOARD_HSE_IN_RESOURCE_MASK              BOARD_GPIO_PIN_MASK(0U)
+#define BOARD_HSE_OUT_RESOURCE_MASK             BOARD_GPIO_PIN_MASK(1U)
+#define BOARD_LSE_IN_RESOURCE_MASK              BOARD_GPIO_PIN_MASK(14U)
+#define BOARD_LSE_OUT_RESOURCE_MASK             BOARD_GPIO_PIN_MASK(15U)
+
+/* Status LED: PC12, active low. */
+#define BOARD_STATUS_LED_PORT                   GPIOC
+#define BOARD_STATUS_LED_PIN                    GPIO_PIN_12
+#define BOARD_STATUS_LED_ACTIVE_LOW             (1U)
+#define BOARD_STATUS_LED_RESOURCE_MASK          BOARD_GPIO_PIN_MASK(12U)
+
+/* W800 control signals. */
+#define BOARD_W800_BOOT_PORT                    GPIOA
+#define BOARD_W800_BOOT_PIN                     GPIO_PIN_8
+#define BOARD_W800_BOOT_ACTIVE_LOW              (0U)
+#define BOARD_W800_BOOT_RESOURCE_MASK           BOARD_GPIO_PIN_MASK(8U)
+#define BOARD_W800_RESET_PORT                   GPIOC
+#define BOARD_W800_RESET_PIN                    GPIO_PIN_9
+#define BOARD_W800_RESET_ACTIVE_LOW             (1U)
+#define BOARD_W800_RESET_RESOURCE_MASK          BOARD_GPIO_PIN_MASK(9U)
+#define BOARD_W800_WAKE_PORT                    GPIOC
+#define BOARD_W800_WAKE_PIN                     GPIO_PIN_8
+#define BOARD_W800_WAKE_ACTIVE_LOW              (0U)
+#define BOARD_W800_WAKE_RESOURCE_MASK           BOARD_GPIO_PIN_MASK(8U)
+
+/* SPI NOR: SPI1 PA5/PA6/PA7 AF5 and board-controlled PA4 chip select. */
+#define BOARD_SPI_FLASH_INSTANCE                SPI1
+#define BOARD_SPI_FLASH_CS_PORT                 GPIOA
+#define BOARD_SPI_FLASH_CS_PIN                  GPIO_PIN_4
+#define BOARD_SPI_FLASH_CS_RESOURCE_MASK        BOARD_GPIO_PIN_MASK(4U)
+#define BOARD_SPI_FLASH_SCK_PORT                GPIOA
+#define BOARD_SPI_FLASH_SCK_PIN                 GPIO_PIN_5
+#define BOARD_SPI_FLASH_SCK_AF                  GPIO_AF5_SPI1
+#define BOARD_SPI_FLASH_SCK_RESOURCE_MASK       BOARD_GPIO_PIN_MASK(5U)
+#define BOARD_SPI_FLASH_MISO_PORT               GPIOA
+#define BOARD_SPI_FLASH_MISO_PIN                GPIO_PIN_6
+#define BOARD_SPI_FLASH_MISO_AF                 GPIO_AF5_SPI1
+#define BOARD_SPI_FLASH_MISO_RESOURCE_MASK      BOARD_GPIO_PIN_MASK(6U)
+#define BOARD_SPI_FLASH_MOSI_PORT               GPIOA
+#define BOARD_SPI_FLASH_MOSI_PIN                GPIO_PIN_7
+#define BOARD_SPI_FLASH_MOSI_AF                 GPIO_AF5_SPI1
+#define BOARD_SPI_FLASH_MOSI_RESOURCE_MASK      BOARD_GPIO_PIN_MASK(7U)
+#define BOARD_SPI_FLASH_MAX_CLOCK_HZ            (16000000UL)
+#define BOARD_SPI_FLASH_IRQ                     SPI1_IRQn
+#define BOARD_SPI_FLASH_IRQ_PRIORITY            (5U)
+
+/* USB full-speed pins and read-only board ID logic. */
+#define BOARD_USB_DM_PORT                       GPIOA
+#define BOARD_USB_DM_PIN                        GPIO_PIN_11
+#define BOARD_USB_DM_RESOURCE_MASK              BOARD_GPIO_PIN_MASK(11U)
+#define BOARD_USB_DP_PORT                       GPIOA
+#define BOARD_USB_DP_PIN                        GPIO_PIN_12
+#define BOARD_USB_DP_RESOURCE_MASK              BOARD_GPIO_PIN_MASK(12U)
+#define BOARD_USB_ID_PORT                       GPIOB
+#define BOARD_USB_ID_PIN                        GPIO_PIN_13
+#define BOARD_USB_ID_RESOURCE_MASK              BOARD_GPIO_PIN_MASK(13U)
+#define BOARD_USB_IRQ                           USB_DRD_FS_IRQn
+#define BOARD_USB_IRQ_PRIORITY                  (5U)
+
+/* LCD SPI2 pins and control outputs. */
+#define BOARD_SPI_LCD_INSTANCE                  SPI2
+#define BOARD_SPI_LCD_SCK_PORT                  GPIOB
+#define BOARD_SPI_LCD_SCK_PIN                   GPIO_PIN_10
+#define BOARD_SPI_LCD_SCK_AF                    GPIO_AF5_SPI2
+#define BOARD_SPI_LCD_SCK_RESOURCE_MASK         BOARD_GPIO_PIN_MASK(10U)
+#define BOARD_SPI_LCD_MOSI_PORT                 GPIOC
+#define BOARD_SPI_LCD_MOSI_PIN                  GPIO_PIN_1
+#define BOARD_SPI_LCD_MOSI_AF                   GPIO_AF5_SPI2
+#define BOARD_SPI_LCD_MOSI_RESOURCE_MASK        BOARD_GPIO_PIN_MASK(1U)
+#define BOARD_SPI_LCD_MISO_PORT                 GPIOC
+#define BOARD_SPI_LCD_MISO_PIN                  GPIO_PIN_2
+#define BOARD_SPI_LCD_MISO_AF                   GPIO_AF5_SPI2
+#define BOARD_SPI_LCD_MISO_RESOURCE_MASK        BOARD_GPIO_PIN_MASK(2U)
+#define BOARD_SPI_LCD_MAX_CLOCK_HZ              (62500000UL)
+#define BOARD_SPI_LCD_CS_PORT                   GPIOD
+#define BOARD_SPI_LCD_CS_PIN                    GPIO_PIN_11
+#define BOARD_SPI_LCD_CS_RESOURCE_MASK          BOARD_GPIO_PIN_MASK(11U)
+#define BOARD_LCD_DC_PORT                       GPIOD
+#define BOARD_LCD_DC_PIN                        GPIO_PIN_12
+#define BOARD_LCD_DC_RESOURCE_MASK              BOARD_GPIO_PIN_MASK(12U)
+#define BOARD_LCD_RESET_PORT                    GPIOB
+#define BOARD_LCD_RESET_PIN                     GPIO_PIN_4
+#define BOARD_LCD_RESET_ACTIVE_LOW              (1U)
+#define BOARD_LCD_RESET_RESOURCE_MASK           BOARD_GPIO_PIN_MASK(4U)
+#define BOARD_SPI_LCD_IRQ                       SPI2_IRQn
+#define BOARD_SPI_LCD_IRQ_PRIORITY              (5U)
+
+/* LCD backlight: PB11 TIM2_CH4 AF1. */
+#define BOARD_PWM_LCD_INSTANCE                  TIM2
+#define BOARD_PWM_LCD_CHANNEL                   TIM_CHANNEL_4
+#define BOARD_PWM_LCD_PORT                      GPIOB
+#define BOARD_PWM_LCD_PIN                       GPIO_PIN_11
+#define BOARD_PWM_LCD_AF                        GPIO_AF1_TIM2
+#define BOARD_PWM_LCD_ACTIVE_LOW                (0U)
+#define BOARD_PWM_LCD_RESOURCE_MASK             BOARD_GPIO_PIN_MASK(11U)
+#define BOARD_PWM_LCD_DEFAULT_FREQUENCY_HZ      (20000UL)
+
+/* Touch controller: I2C1 PB8/PB9 AF4, PB14 interrupt, PB15 reset. */
+#define BOARD_I2C_TOUCH_INSTANCE                I2C1
+#define BOARD_I2C_TOUCH_SCL_PORT                GPIOB
+#define BOARD_I2C_TOUCH_SCL_PIN                 GPIO_PIN_8
+#define BOARD_I2C_TOUCH_SCL_AF                  GPIO_AF4_I2C1
+#define BOARD_I2C_TOUCH_SCL_RESOURCE_MASK       BOARD_GPIO_PIN_MASK(8U)
+#define BOARD_I2C_TOUCH_SDA_PORT                GPIOB
+#define BOARD_I2C_TOUCH_SDA_PIN                 GPIO_PIN_9
+#define BOARD_I2C_TOUCH_SDA_AF                  GPIO_AF4_I2C1
+#define BOARD_I2C_TOUCH_SDA_RESOURCE_MASK       BOARD_GPIO_PIN_MASK(9U)
+#define BOARD_I2C_TOUCH_BITRATE_HZ              (400000UL)
+#define BOARD_I2C_TOUCH_RISE_TIME_NS            (300UL)
+#define BOARD_I2C_TOUCH_FALL_TIME_NS            (100UL)
+#define BOARD_TOUCH_INTERRUPT_PORT              GPIOB
+#define BOARD_TOUCH_INTERRUPT_PIN               GPIO_PIN_14
+#define BOARD_TOUCH_INTERRUPT_ACTIVE_LOW        (1U)
+#define BOARD_TOUCH_INTERRUPT_RESOURCE_MASK     BOARD_GPIO_PIN_MASK(14U)
+#define BOARD_TOUCH_RESET_PORT                  GPIOB
+#define BOARD_TOUCH_RESET_PIN                   GPIO_PIN_15
+#define BOARD_TOUCH_RESET_ACTIVE_LOW            (1U)
+#define BOARD_TOUCH_RESET_RESOURCE_MASK         BOARD_GPIO_PIN_MASK(15U)
+
+/* Two populated FDCAN transceivers. */
+#define BOARD_FDCAN_1_INSTANCE                  FDCAN1
+#define BOARD_FDCAN_1_TX_PORT                   GPIOB
+#define BOARD_FDCAN_1_TX_PIN                    GPIO_PIN_7
+#define BOARD_FDCAN_1_TX_AF                     GPIO_AF9_FDCAN1
+#define BOARD_FDCAN_1_TX_RESOURCE_MASK          BOARD_GPIO_PIN_MASK(7U)
+#define BOARD_FDCAN_1_RX_PORT                   GPIOE
+#define BOARD_FDCAN_1_RX_PIN                    GPIO_PIN_0
+#define BOARD_FDCAN_1_RX_AF                     GPIO_AF9_FDCAN1
+#define BOARD_FDCAN_1_RX_RESOURCE_MASK          BOARD_GPIO_PIN_MASK(0U)
+#define BOARD_FDCAN_2_INSTANCE                  FDCAN2
+#define BOARD_FDCAN_2_TX_PORT                   GPIOB
+#define BOARD_FDCAN_2_TX_PIN                    GPIO_PIN_6
+#define BOARD_FDCAN_2_TX_AF                     GPIO_AF9_FDCAN2
+#define BOARD_FDCAN_2_TX_RESOURCE_MASK          BOARD_GPIO_PIN_MASK(6U)
+#define BOARD_FDCAN_2_RX_PORT                   GPIOB
+#define BOARD_FDCAN_2_RX_PIN                    GPIO_PIN_12
+#define BOARD_FDCAN_2_RX_AF                     GPIO_AF9_FDCAN2
+#define BOARD_FDCAN_2_RX_RESOURCE_MASK          BOARD_GPIO_PIN_MASK(12U)
+#define BOARD_FDCAN_IRQ_PRIORITY                (8U)
+
+#define BOARD_DMA_RESOURCE_NONE                 (255U)
+#define BOARD_DMA_GPDMA1_CHANNEL0_ID            (0U)
+#define BOARD_DMA_GPDMA1_CHANNEL7_ID            (7U)
+#define BOARD_DMA_UNUSED_INSTANCE               ((DMA_Channel_TypeDef *)0)
+#define BOARD_DMA_UNUSED_IRQ                    ((IRQn_Type)0)
+
+/** @brief Shared default baud rate for the four populated board UART roles. */
+#define BOARD_UART_DEFAULT_BAUD_RATE            (115200U)
+
+/* W800 AT UART: USART1, PA9/PA10 AF7, GPDMA1 channel 0 receive. */
+#define BOARD_UART_W800_INSTANCE                USART1
+#define BOARD_UART_W800_TX_PORT                 GPIOA
+#define BOARD_UART_W800_TX_PIN                  GPIO_PIN_9
+#define BOARD_UART_W800_TX_AF                   GPIO_AF7_USART1
+#define BOARD_UART_W800_TX_PULL                 GPIO_NOPULL
+#define BOARD_UART_W800_TX_SPEED                GPIO_SPEED_FREQ_LOW
+#define BOARD_UART_W800_TX_RESOURCE_ID          BOARD_GPIO_RESOURCE_ID(BOARD_GPIO_PORT_A_ID, 9U)
+#define BOARD_UART_W800_TX_RESOURCE_MASK        BOARD_GPIO_PIN_MASK(9U)
+#define BOARD_UART_W800_RX_PORT                 GPIOA
+#define BOARD_UART_W800_RX_PIN                  GPIO_PIN_10
+#define BOARD_UART_W800_RX_AF                   GPIO_AF7_USART1
+#define BOARD_UART_W800_RX_PULL                 GPIO_NOPULL
+#define BOARD_UART_W800_RX_SPEED                GPIO_SPEED_FREQ_LOW
+#define BOARD_UART_W800_RX_RESOURCE_ID          BOARD_GPIO_RESOURCE_ID(BOARD_GPIO_PORT_A_ID, 10U)
+#define BOARD_UART_W800_RX_RESOURCE_MASK        BOARD_GPIO_PIN_MASK(10U)
+#define BOARD_UART_W800_IRQ                     USART1_IRQn
+#define BOARD_UART_W800_IRQ_PRIORITY            (7U)
+#define BOARD_UART_W800_RX_DMA_ENABLED          (1U)
+#define BOARD_UART_W800_RX_DMA_CACHE_INVALIDATE (1U)
+#define BOARD_UART_W800_RX_DMA_INSTANCE         GPDMA1_Channel0
+#define BOARD_UART_W800_RX_DMA_REQUEST          GPDMA1_REQUEST_USART1_RX
+#define BOARD_UART_W800_RX_DMA_IRQ              GPDMA1_Channel0_IRQn
+#define BOARD_UART_W800_RX_DMA_IRQ_PRIORITY     (7U)
+#define BOARD_UART_W800_RX_DMA_RESOURCE_ID      BOARD_DMA_GPDMA1_CHANNEL0_ID
+
+/* RS-485 field port 1: USART2, PA2/PA3 AF7, interrupt receive. */
+#define BOARD_UART_RS485_1_INSTANCE             USART2
+#define BOARD_UART_RS485_1_TX_PORT              GPIOA
+#define BOARD_UART_RS485_1_TX_PIN               GPIO_PIN_2
+#define BOARD_UART_RS485_1_TX_AF                GPIO_AF7_USART2
+#define BOARD_UART_RS485_1_TX_PULL              GPIO_NOPULL
+#define BOARD_UART_RS485_1_TX_SPEED             GPIO_SPEED_FREQ_LOW
+#define BOARD_UART_RS485_1_TX_RESOURCE_ID       BOARD_GPIO_RESOURCE_ID(BOARD_GPIO_PORT_A_ID, 2U)
+#define BOARD_UART_RS485_1_TX_RESOURCE_MASK     BOARD_GPIO_PIN_MASK(2U)
+#define BOARD_UART_RS485_1_RX_PORT              GPIOA
+#define BOARD_UART_RS485_1_RX_PIN               GPIO_PIN_3
+#define BOARD_UART_RS485_1_RX_AF                GPIO_AF7_USART2
+#define BOARD_UART_RS485_1_RX_PULL              GPIO_NOPULL
+#define BOARD_UART_RS485_1_RX_SPEED             GPIO_SPEED_FREQ_LOW
+#define BOARD_UART_RS485_1_RX_RESOURCE_ID       BOARD_GPIO_RESOURCE_ID(BOARD_GPIO_PORT_A_ID, 3U)
+#define BOARD_UART_RS485_1_RX_RESOURCE_MASK     BOARD_GPIO_PIN_MASK(3U)
+#define BOARD_UART_RS485_1_IRQ                  USART2_IRQn
+#define BOARD_UART_RS485_1_IRQ_PRIORITY         (10U)
+#define BOARD_UART_RS485_1_RX_DMA_ENABLED       (0U)
+#define BOARD_UART_RS485_1_RX_DMA_CACHE_INVALIDATE (0U)
+#define BOARD_UART_RS485_1_RX_DMA_INSTANCE      BOARD_DMA_UNUSED_INSTANCE
+#define BOARD_UART_RS485_1_RX_DMA_REQUEST       GPDMA1_REQUEST_USART2_RX
+#define BOARD_UART_RS485_1_RX_DMA_IRQ           BOARD_DMA_UNUSED_IRQ
+#define BOARD_UART_RS485_1_RX_DMA_IRQ_PRIORITY  (0U)
+#define BOARD_UART_RS485_1_RX_DMA_RESOURCE_ID   BOARD_DMA_RESOURCE_NONE
+
+/* RS-485 field port 2: UART4, PA0/PA1 AF8, interrupt receive. */
+#define BOARD_UART_RS485_2_INSTANCE             UART4
+#define BOARD_UART_RS485_2_TX_PORT              GPIOA
+#define BOARD_UART_RS485_2_TX_PIN               GPIO_PIN_0
+#define BOARD_UART_RS485_2_TX_AF                GPIO_AF8_UART4
+#define BOARD_UART_RS485_2_TX_PULL              GPIO_NOPULL
+#define BOARD_UART_RS485_2_TX_SPEED             GPIO_SPEED_FREQ_LOW
+#define BOARD_UART_RS485_2_TX_RESOURCE_ID       BOARD_GPIO_RESOURCE_ID(BOARD_GPIO_PORT_A_ID, 0U)
+#define BOARD_UART_RS485_2_TX_RESOURCE_MASK     BOARD_GPIO_PIN_MASK(0U)
+#define BOARD_UART_RS485_2_RX_PORT              GPIOA
+#define BOARD_UART_RS485_2_RX_PIN               GPIO_PIN_1
+#define BOARD_UART_RS485_2_RX_AF                GPIO_AF8_UART4
+#define BOARD_UART_RS485_2_RX_PULL              GPIO_NOPULL
+#define BOARD_UART_RS485_2_RX_SPEED             GPIO_SPEED_FREQ_LOW
+#define BOARD_UART_RS485_2_RX_RESOURCE_ID       BOARD_GPIO_RESOURCE_ID(BOARD_GPIO_PORT_A_ID, 1U)
+#define BOARD_UART_RS485_2_RX_RESOURCE_MASK     BOARD_GPIO_PIN_MASK(1U)
+#define BOARD_UART_RS485_2_IRQ                  UART4_IRQn
+#define BOARD_UART_RS485_2_IRQ_PRIORITY         (10U)
+#define BOARD_UART_RS485_2_RX_DMA_ENABLED       (0U)
+#define BOARD_UART_RS485_2_RX_DMA_CACHE_INVALIDATE (0U)
+#define BOARD_UART_RS485_2_RX_DMA_INSTANCE      BOARD_DMA_UNUSED_INSTANCE
+#define BOARD_UART_RS485_2_RX_DMA_REQUEST       GPDMA1_REQUEST_UART4_RX
+#define BOARD_UART_RS485_2_RX_DMA_IRQ           BOARD_DMA_UNUSED_IRQ
+#define BOARD_UART_RS485_2_RX_DMA_IRQ_PRIORITY  (0U)
+#define BOARD_UART_RS485_2_RX_DMA_RESOURCE_ID   BOARD_DMA_RESOURCE_NONE
+
+/* Debug UART: USART3, PC10/PC11 AF7, interrupt receive. */
+#define BOARD_UART_DEBUG_INSTANCE               USART3
+#define BOARD_UART_DEBUG_TX_PORT                GPIOC
+#define BOARD_UART_DEBUG_TX_PIN                 GPIO_PIN_10
+#define BOARD_UART_DEBUG_TX_AF                  GPIO_AF7_USART3
+#define BOARD_UART_DEBUG_TX_PULL                GPIO_NOPULL
+#define BOARD_UART_DEBUG_TX_SPEED               GPIO_SPEED_FREQ_LOW
+#define BOARD_UART_DEBUG_TX_RESOURCE_ID         BOARD_GPIO_RESOURCE_ID(BOARD_GPIO_PORT_C_ID, 10U)
+#define BOARD_UART_DEBUG_TX_RESOURCE_MASK       BOARD_GPIO_PIN_MASK(10U)
+#define BOARD_UART_DEBUG_RX_PORT                GPIOC
+#define BOARD_UART_DEBUG_RX_PIN                 GPIO_PIN_11
+#define BOARD_UART_DEBUG_RX_AF                  GPIO_AF7_USART3
+#define BOARD_UART_DEBUG_RX_PULL                GPIO_PULLUP
+#define BOARD_UART_DEBUG_RX_SPEED               GPIO_SPEED_FREQ_LOW
+#define BOARD_UART_DEBUG_RX_RESOURCE_ID         BOARD_GPIO_RESOURCE_ID(BOARD_GPIO_PORT_C_ID, 11U)
+#define BOARD_UART_DEBUG_RX_RESOURCE_MASK       BOARD_GPIO_PIN_MASK(11U)
+#define BOARD_UART_DEBUG_IRQ                    USART3_IRQn
+#define BOARD_UART_DEBUG_IRQ_PRIORITY           (10U)
+#define BOARD_UART_DEBUG_RX_DMA_ENABLED         (0U)
+#define BOARD_UART_DEBUG_RX_DMA_CACHE_INVALIDATE (0U)
+#define BOARD_UART_DEBUG_RX_DMA_INSTANCE        BOARD_DMA_UNUSED_INSTANCE
+#define BOARD_UART_DEBUG_RX_DMA_REQUEST         GPDMA1_REQUEST_USART3_RX
+#define BOARD_UART_DEBUG_RX_DMA_IRQ             BOARD_DMA_UNUSED_IRQ
+#define BOARD_UART_DEBUG_RX_DMA_IRQ_PRIORITY    (0U)
+#define BOARD_UART_DEBUG_RX_DMA_RESOURCE_ID     BOARD_DMA_RESOURCE_NONE
+
+/* Existing SPI2 LCD transmit DMA reservation, still initialized by Core/Src/spi.c. */
+#define BOARD_SPI_LCD_TX_DMA_ENABLED            (1U)
+#define BOARD_SPI_LCD_TX_DMA_REQUEST            GPDMA1_REQUEST_SPI2_TX
+#define BOARD_SPI_LCD_TX_DMA_RESOURCE_ID        BOARD_DMA_GPDMA1_CHANNEL7_ID
+
+/* Per-port sum equals bitwise OR only when every exclusive signal is unique. */
+#define BOARD_GPIOA_RESOURCE_SUM \
+    (BOARD_UART_RS485_2_TX_RESOURCE_MASK + BOARD_UART_RS485_2_RX_RESOURCE_MASK + \
+     BOARD_UART_RS485_1_TX_RESOURCE_MASK + BOARD_UART_RS485_1_RX_RESOURCE_MASK + \
+     BOARD_SPI_FLASH_CS_RESOURCE_MASK + BOARD_SPI_FLASH_SCK_RESOURCE_MASK + \
+     BOARD_SPI_FLASH_MISO_RESOURCE_MASK + BOARD_SPI_FLASH_MOSI_RESOURCE_MASK + \
+     BOARD_W800_BOOT_RESOURCE_MASK + BOARD_UART_W800_TX_RESOURCE_MASK + \
+     BOARD_UART_W800_RX_RESOURCE_MASK + BOARD_USB_DM_RESOURCE_MASK + \
+     BOARD_USB_DP_RESOURCE_MASK + BOARD_DEBUG_SWDIO_RESOURCE_MASK + \
+     BOARD_DEBUG_SWCLK_RESOURCE_MASK)
+#define BOARD_GPIOA_RESOURCE_OR \
+    (BOARD_UART_RS485_2_TX_RESOURCE_MASK | BOARD_UART_RS485_2_RX_RESOURCE_MASK | \
+     BOARD_UART_RS485_1_TX_RESOURCE_MASK | BOARD_UART_RS485_1_RX_RESOURCE_MASK | \
+     BOARD_SPI_FLASH_CS_RESOURCE_MASK | BOARD_SPI_FLASH_SCK_RESOURCE_MASK | \
+     BOARD_SPI_FLASH_MISO_RESOURCE_MASK | BOARD_SPI_FLASH_MOSI_RESOURCE_MASK | \
+     BOARD_W800_BOOT_RESOURCE_MASK | BOARD_UART_W800_TX_RESOURCE_MASK | \
+     BOARD_UART_W800_RX_RESOURCE_MASK | BOARD_USB_DM_RESOURCE_MASK | \
+     BOARD_USB_DP_RESOURCE_MASK | BOARD_DEBUG_SWDIO_RESOURCE_MASK | \
+     BOARD_DEBUG_SWCLK_RESOURCE_MASK)
+
+#define BOARD_GPIOB_RESOURCE_SUM \
+    (BOARD_DEBUG_SWO_RESOURCE_MASK + BOARD_LCD_RESET_RESOURCE_MASK + \
+     BOARD_FDCAN_2_TX_RESOURCE_MASK + BOARD_FDCAN_1_TX_RESOURCE_MASK + \
+     BOARD_I2C_TOUCH_SCL_RESOURCE_MASK + BOARD_I2C_TOUCH_SDA_RESOURCE_MASK + \
+     BOARD_SPI_LCD_SCK_RESOURCE_MASK + BOARD_PWM_LCD_RESOURCE_MASK + \
+     BOARD_FDCAN_2_RX_RESOURCE_MASK + BOARD_USB_ID_RESOURCE_MASK + \
+     BOARD_TOUCH_INTERRUPT_RESOURCE_MASK + BOARD_TOUCH_RESET_RESOURCE_MASK)
+#define BOARD_GPIOB_RESOURCE_OR \
+    (BOARD_DEBUG_SWO_RESOURCE_MASK | BOARD_LCD_RESET_RESOURCE_MASK | \
+     BOARD_FDCAN_2_TX_RESOURCE_MASK | BOARD_FDCAN_1_TX_RESOURCE_MASK | \
+     BOARD_I2C_TOUCH_SCL_RESOURCE_MASK | BOARD_I2C_TOUCH_SDA_RESOURCE_MASK | \
+     BOARD_SPI_LCD_SCK_RESOURCE_MASK | BOARD_PWM_LCD_RESOURCE_MASK | \
+     BOARD_FDCAN_2_RX_RESOURCE_MASK | BOARD_USB_ID_RESOURCE_MASK | \
+     BOARD_TOUCH_INTERRUPT_RESOURCE_MASK | BOARD_TOUCH_RESET_RESOURCE_MASK)
+
+#define BOARD_GPIOC_RESOURCE_SUM \
+    (BOARD_SPI_LCD_MOSI_RESOURCE_MASK + BOARD_SPI_LCD_MISO_RESOURCE_MASK + \
+     BOARD_W800_WAKE_RESOURCE_MASK + BOARD_W800_RESET_RESOURCE_MASK + \
+     BOARD_UART_DEBUG_TX_RESOURCE_MASK + BOARD_UART_DEBUG_RX_RESOURCE_MASK + \
+     BOARD_STATUS_LED_RESOURCE_MASK + BOARD_LSE_IN_RESOURCE_MASK + \
+     BOARD_LSE_OUT_RESOURCE_MASK)
+#define BOARD_GPIOC_RESOURCE_OR \
+    (BOARD_SPI_LCD_MOSI_RESOURCE_MASK | BOARD_SPI_LCD_MISO_RESOURCE_MASK | \
+     BOARD_W800_WAKE_RESOURCE_MASK | BOARD_W800_RESET_RESOURCE_MASK | \
+     BOARD_UART_DEBUG_TX_RESOURCE_MASK | BOARD_UART_DEBUG_RX_RESOURCE_MASK | \
+     BOARD_STATUS_LED_RESOURCE_MASK | BOARD_LSE_IN_RESOURCE_MASK | \
+     BOARD_LSE_OUT_RESOURCE_MASK)
+
+#define BOARD_GPIOD_RESOURCE_SUM \
+    (BOARD_SPI_LCD_CS_RESOURCE_MASK + BOARD_LCD_DC_RESOURCE_MASK)
+#define BOARD_GPIOD_RESOURCE_OR \
+    (BOARD_SPI_LCD_CS_RESOURCE_MASK | BOARD_LCD_DC_RESOURCE_MASK)
+
+#if (BOARD_GPIOA_RESOURCE_SUM != BOARD_GPIOA_RESOURCE_OR) || \
+    (BOARD_GPIOB_RESOURCE_SUM != BOARD_GPIOB_RESOURCE_OR) || \
+    (BOARD_GPIOC_RESOURCE_SUM != BOARD_GPIOC_RESOURCE_OR) || \
+    (BOARD_GPIOD_RESOURCE_SUM != BOARD_GPIOD_RESOURCE_OR)
+#error "Two enabled board resources use the same GPIO pin"
+#endif
+
+/* Every enabled UART DMA owner must name a real channel. */
+#if (BOARD_UART_W800_RX_DMA_ENABLED != 0U) && \
+    (BOARD_UART_W800_RX_DMA_RESOURCE_ID == BOARD_DMA_RESOURCE_NONE)
+#error "W800 UART receive DMA is enabled without a channel"
+#endif
+
+#if (BOARD_UART_RS485_1_RX_DMA_ENABLED != 0U) && \
+    (BOARD_UART_RS485_1_RX_DMA_RESOURCE_ID == BOARD_DMA_RESOURCE_NONE)
+#error "RS-485 port 1 receive DMA is enabled without a channel"
+#endif
+
+#if (BOARD_UART_RS485_2_RX_DMA_ENABLED != 0U) && \
+    (BOARD_UART_RS485_2_RX_DMA_RESOURCE_ID == BOARD_DMA_RESOURCE_NONE)
+#error "RS-485 port 2 receive DMA is enabled without a channel"
+#endif
+
+#if (BOARD_UART_DEBUG_RX_DMA_ENABLED != 0U) && \
+    (BOARD_UART_DEBUG_RX_DMA_RESOURCE_ID == BOARD_DMA_RESOURCE_NONE)
+#error "Debug UART receive DMA is enabled without a channel"
+#endif
+
+/* Simultaneous UART DMA owners must not share one GPDMA1 channel. */
+#if ((BOARD_UART_W800_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_RS485_1_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_W800_RX_DMA_RESOURCE_ID == BOARD_UART_RS485_1_RX_DMA_RESOURCE_ID)) || \
+    ((BOARD_UART_W800_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_RS485_2_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_W800_RX_DMA_RESOURCE_ID == BOARD_UART_RS485_2_RX_DMA_RESOURCE_ID)) || \
+    ((BOARD_UART_W800_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_DEBUG_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_W800_RX_DMA_RESOURCE_ID == BOARD_UART_DEBUG_RX_DMA_RESOURCE_ID)) || \
+    ((BOARD_UART_RS485_1_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_RS485_2_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_RS485_1_RX_DMA_RESOURCE_ID == BOARD_UART_RS485_2_RX_DMA_RESOURCE_ID)) || \
+    ((BOARD_UART_RS485_1_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_DEBUG_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_RS485_1_RX_DMA_RESOURCE_ID == BOARD_UART_DEBUG_RX_DMA_RESOURCE_ID)) || \
+    ((BOARD_UART_RS485_2_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_DEBUG_RX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_RS485_2_RX_DMA_RESOURCE_ID == BOARD_UART_DEBUG_RX_DMA_RESOURCE_ID))
+#error "Two enabled board UART receivers use the same GPDMA1 channel"
+#endif
+
+/* UART DMA owners must also avoid the existing LCD SPI2 transmit channel. */
+#if (BOARD_UART_W800_RX_DMA_ENABLED != 0U) && \
+    (BOARD_SPI_LCD_TX_DMA_ENABLED != 0U) && \
+    (BOARD_UART_W800_RX_DMA_RESOURCE_ID == BOARD_SPI_LCD_TX_DMA_RESOURCE_ID)
+#error "W800 UART receive and LCD SPI transmit use the same GPDMA1 channel"
+#endif
+
+#if ((BOARD_UART_RS485_1_RX_DMA_ENABLED != 0U) && \
+     (BOARD_SPI_LCD_TX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_RS485_1_RX_DMA_RESOURCE_ID == BOARD_SPI_LCD_TX_DMA_RESOURCE_ID)) || \
+    ((BOARD_UART_RS485_2_RX_DMA_ENABLED != 0U) && \
+     (BOARD_SPI_LCD_TX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_RS485_2_RX_DMA_RESOURCE_ID == BOARD_SPI_LCD_TX_DMA_RESOURCE_ID)) || \
+    ((BOARD_UART_DEBUG_RX_DMA_ENABLED != 0U) && \
+     (BOARD_SPI_LCD_TX_DMA_ENABLED != 0U) && \
+     (BOARD_UART_DEBUG_RX_DMA_RESOURCE_ID == BOARD_SPI_LCD_TX_DMA_RESOURCE_ID))
+#error "A board UART receiver and LCD SPI transmit use the same GPDMA1 channel"
+#endif
+
+#if (BOARD_UART_W800_IRQ_PRIORITY >= 16U) || \
+    (BOARD_UART_RS485_1_IRQ_PRIORITY >= 16U) || \
+    (BOARD_UART_RS485_2_IRQ_PRIORITY >= 16U) || \
+    (BOARD_UART_DEBUG_IRQ_PRIORITY >= 16U) || \
+    (BOARD_UART_W800_RX_DMA_IRQ_PRIORITY >= 16U)
+#error "A board UART interrupt priority exceeds the STM32H563 NVIC range"
+#endif
+
+#endif /* BOARD_RESOURCES_H */

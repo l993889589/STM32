@@ -1,3 +1,8 @@
+/**
+ * @file bsp.c
+ * @brief ART-Pi H750 board-support initialization entry.
+ */
+
 #include "bsp.h"
 #include "tx_api.h"
 
@@ -5,6 +10,7 @@ static void system_clock_config(void);
 static void mpu_config(void);
 static void cpu_cache_enable(void);
 
+/** @brief Perform the system_init board-support operation. */
 void system_init(void)
 {
 #if defined(ART_PI_QSPI_APP)
@@ -24,6 +30,7 @@ void system_init(void)
     system_clock_config();
 }
 
+/** @brief Perform the bsp_init board-support operation. */
 void bsp_init(void)
 {
     if (bsp_tim_init() != HAL_OK)
@@ -46,6 +53,7 @@ void bsp_init(void)
     bsp_led_init();
 }
 
+/** @brief Perform the bsp_delay_ms board-support operation. */
 void bsp_delay_ms(uint32_t delay_ms)
 {
     if (delay_ms == 0U)
@@ -76,11 +84,13 @@ void bsp_delay_ms(uint32_t delay_ms)
     }
 }
 
+/** @brief Perform the bsp_delay_us board-support operation. */
 void bsp_delay_us(uint32_t delay_us)
 {
     bsp_dwt_delay_us(delay_us);
 }
 
+/** @brief Perform the bsp_error_handler board-support operation. */
 void bsp_error_handler(const char *file, uint32_t line)
 {
     (void)file;
@@ -92,6 +102,7 @@ void bsp_error_handler(const char *file, uint32_t line)
     }
 }
 
+/** @brief Perform the system_clock_config board-support operation. */
 static void system_clock_config(void)
 {
     RCC_OscInitTypeDef oscillator_config = {0};
@@ -153,6 +164,7 @@ static void system_clock_config(void)
     HAL_EnableCompensationCell();
 }
 
+/** @brief Perform the mpu_config board-support operation. */
 static void mpu_config(void)
 {
     MPU_Region_InitTypeDef region = {0};
@@ -196,6 +208,7 @@ static void mpu_config(void)
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 }
 
+/** @brief Perform the cpu_cache_enable board-support operation. */
 static void cpu_cache_enable(void)
 {
     SCB_EnableICache();

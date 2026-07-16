@@ -1,3 +1,8 @@
+/**
+ * @file bsp_spi_bus.h
+ * @brief ART-Pi H750 shared SPI bus BSP interface.
+ */
+
 #ifndef BSP_SPI_BUS_H
 #define BSP_SPI_BUS_H
 

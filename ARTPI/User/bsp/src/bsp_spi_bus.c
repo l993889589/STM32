@@ -1,3 +1,8 @@
+/**
+ * @file bsp_spi_bus.c
+ * @brief ART-Pi H750 shared SPI bus BSP implementation.
+ */
+
 #include "bsp.h"
 
 #include <string.h>
@@ -68,6 +73,7 @@ static uint8_t bsp_spi_timeout_elapsed(uint32_t start_cycles,
                                        uint32_t timeout_ms);
 static void bsp_spi_restore_interrupts(uint32_t interrupt_state);
 
+/** @brief Perform the bsp_spi_bus_init board-support operation. */
 HAL_StatusTypeDef bsp_spi_bus_init(void)
 {
     RCC_PeriphCLKInitTypeDef clock_config = {0};
@@ -96,6 +102,7 @@ HAL_StatusTypeDef bsp_spi_bus_init(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_spi_bus_config board-support operation. */
 HAL_StatusTypeDef bsp_spi_bus_config(uint32_t baud_rate_prescaler,
                                      uint32_t clock_phase,
                                      uint32_t clock_polarity)
@@ -148,6 +155,7 @@ HAL_StatusTypeDef bsp_spi_bus_config(uint32_t baud_rate_prescaler,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_spi_bus_enter board-support operation. */
 HAL_StatusTypeDef bsp_spi_bus_enter(void)
 {
     uint32_t interrupt_state = __get_PRIMASK();
@@ -166,6 +174,7 @@ HAL_StatusTypeDef bsp_spi_bus_enter(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_spi_bus_exit board-support operation. */
 void bsp_spi_bus_exit(void)
 {
     uint32_t interrupt_state = __get_PRIMASK();
@@ -176,11 +185,13 @@ void bsp_spi_bus_exit(void)
     bsp_spi_restore_interrupts(interrupt_state);
 }
 
+/** @brief Perform the bsp_spi_bus_busy board-support operation. */
 uint8_t bsp_spi_bus_busy(void)
 {
     return spi_bus_locked;
 }
 
+/** @brief Perform the bsp_spi_bus_transfer board-support operation. */
 HAL_StatusTypeDef bsp_spi_bus_transfer(const uint8_t *tx_data,
                                        uint8_t *rx_data,
                                        size_t length,
@@ -232,11 +243,13 @@ HAL_StatusTypeDef bsp_spi_bus_transfer(const uint8_t *tx_data,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_spi_bus_get_transfer_mode board-support operation. */
 uint32_t bsp_spi_bus_get_transfer_mode(void)
 {
     return BSP_SPI_TRANSFER_MODE;
 }
 
+/** @brief Perform the bsp_spi_bus_transfer_chunk board-support operation. */
 static HAL_StatusTypeDef bsp_spi_bus_transfer_chunk(uint16_t length,
                                                     uint32_t timeout_ms)
 {
@@ -284,6 +297,7 @@ static HAL_StatusTypeDef bsp_spi_bus_transfer_chunk(uint16_t length,
 #endif
 }
 
+/** @brief Perform the bsp_spi_timeout_elapsed board-support operation. */
 static uint8_t bsp_spi_timeout_elapsed(uint32_t start_cycles,
                                        uint32_t timeout_ms)
 {
@@ -303,6 +317,7 @@ static uint8_t bsp_spi_timeout_elapsed(uint32_t start_cycles,
     return (bsp_dwt_elapsed_cycles(start_cycles) >= (uint32_t)timeout_cycles) ? 1U : 0U;
 }
 
+/** @brief Perform the bsp_spi_restore_interrupts board-support operation. */
 static void bsp_spi_restore_interrupts(uint32_t interrupt_state)
 {
     __DMB();
@@ -312,6 +327,7 @@ static void bsp_spi_restore_interrupts(uint32_t interrupt_state)
     }
 }
 
+/** @brief Handle the HAL_SPI_MspInit HAL callback. */
 void HAL_SPI_MspInit(SPI_HandleTypeDef *handle)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -389,6 +405,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *handle)
 #endif
 }
 
+/** @brief Handle the HAL_SPI_TxRxCpltCallback HAL callback. */
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *handle)
 {
     if (handle == &spi_handle)
@@ -398,6 +415,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *handle)
     }
 }
 
+/** @brief Handle the HAL_SPI_ErrorCallback HAL callback. */
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *handle)
 {
     if (handle == &spi_handle)
@@ -408,6 +426,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *handle)
 }
 
 #if BSP_SPI_TRANSFER_MODE != BSP_SPI_TRANSFER_MODE_POLLING
+/** @brief Handle the SPI1_IRQHandler interrupt. */
 void SPI1_IRQHandler(void)
 {
     HAL_SPI_IRQHandler(&spi_handle);
@@ -415,11 +434,13 @@ void SPI1_IRQHandler(void)
 #endif
 
 #if BSP_SPI_TRANSFER_MODE == BSP_SPI_TRANSFER_MODE_DMA
+/** @brief Handle the DMA1_Stream1_IRQHandler interrupt. */
 void DMA1_Stream1_IRQHandler(void)
 {
     HAL_DMA_IRQHandler(&spi_rx_dma_handle);
 }
 
+/** @brief Handle the DMA1_Stream2_IRQHandler interrupt. */
 void DMA1_Stream2_IRQHandler(void)
 {
     HAL_DMA_IRQHandler(&spi_tx_dma_handle);

@@ -1,3 +1,8 @@
+/**
+ * @file bsp_tim.h
+ * @brief ART-Pi H750 general timer BSP interface.
+ */
+
 #ifndef BSP_TIM_H
 #define BSP_TIM_H
 

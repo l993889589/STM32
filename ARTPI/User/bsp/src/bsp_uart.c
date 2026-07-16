@@ -1,3 +1,8 @@
+/**
+ * @file bsp_uart.c
+ * @brief ART-Pi H750 UART initialization, IRQ, and transfer implementation.
+ */
+
 #include "bsp.h"
 
 #include <string.h>
@@ -86,6 +91,8 @@ typedef struct
     volatile uint16_t tx_count;
     volatile uint8_t tx_state;
     volatile uint8_t initialized;
+    volatile uint8_t reconfiguring;
+    volatile uint8_t faulted;
     bsp_uart_rx_callback_t rx_callback;
     void *rx_argument;
     bsp_uart_tx_callback_t send_before;
@@ -287,9 +294,13 @@ static void bsp_uart_enable_gpio_clock(GPIO_TypeDef *port);
 static void bsp_uart_enable_peripheral_clock(USART_TypeDef *instance);
 static void bsp_uart_configure_kernel_clock(USART_TypeDef *instance);
 static void bsp_uart_irq_handler(bsp_uart_device_t *device);
+static HAL_StatusTypeDef bsp_uart_apply_baud_rate(
+    bsp_uart_device_t *device,
+    uint32_t baud_rate);
 static uint32_t bsp_uart_enter_critical(void);
 static void bsp_uart_exit_critical(uint32_t interrupt_state);
 
+/** @brief Perform the bsp_uart_init board-support operation. */
 void bsp_uart_init(void)
 {
     uint32_t index;
@@ -303,6 +314,7 @@ void bsp_uart_init(void)
     }
 }
 
+/** @brief Perform the bsp_uart_receive_start board-support operation. */
 HAL_StatusTypeDef bsp_uart_receive_start(bsp_uart_port_t port,
                                          bsp_uart_rx_callback_t callback,
                                          void *argument)
@@ -310,13 +322,20 @@ HAL_StatusTypeDef bsp_uart_receive_start(bsp_uart_port_t port,
     bsp_uart_device_t *device = bsp_uart_get_device(port);
     uint32_t interrupt_state;
 
-    if ((device == NULL) || (device->initialized == 0U) || (callback == NULL))
+    if ((device == NULL) || (device->initialized == 0U) ||
+        (device->reconfiguring != 0U) || (device->faulted != 0U) ||
+        (callback == NULL))
     {
         return HAL_ERROR;
     }
 
     interrupt_state = bsp_uart_enter_critical();
 
+    if ((device->reconfiguring != 0U) || (device->faulted != 0U))
+    {
+        bsp_uart_exit_critical(interrupt_state);
+        return HAL_BUSY;
+    }
     if ((device->rx_callback != NULL) &&
         ((device->rx_callback != callback) || (device->rx_argument != argument)))
     {
@@ -325,29 +344,42 @@ HAL_StatusTypeDef bsp_uart_receive_start(bsp_uart_port_t port,
     }
 
     __HAL_UART_DISABLE_IT(&device->handle, UART_IT_RXNE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_PE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_ERR);
     device->rx_callback = callback;
     device->rx_argument = argument;
     SET_BIT(device->instance->RQR, USART_RQR_RXFRQ);
     WRITE_REG(device->instance->ICR,
               USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NECF | USART_ICR_ORECF);
     __HAL_UART_ENABLE_IT(&device->handle, UART_IT_RXNE);
+    __HAL_UART_ENABLE_IT(&device->handle, UART_IT_PE);
+    __HAL_UART_ENABLE_IT(&device->handle, UART_IT_ERR);
 
     bsp_uart_exit_critical(interrupt_state);
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_uart_receive_stop board-support operation. */
 HAL_StatusTypeDef bsp_uart_receive_stop(bsp_uart_port_t port)
 {
     bsp_uart_device_t *device = bsp_uart_get_device(port);
     uint32_t interrupt_state;
 
-    if ((device == NULL) || (device->initialized == 0U))
+    if ((device == NULL) || (device->initialized == 0U) ||
+        (device->reconfiguring != 0U) || (device->faulted != 0U))
     {
         return HAL_ERROR;
     }
 
     interrupt_state = bsp_uart_enter_critical();
+    if ((device->reconfiguring != 0U) || (device->faulted != 0U))
+    {
+        bsp_uart_exit_critical(interrupt_state);
+        return HAL_BUSY;
+    }
     __HAL_UART_DISABLE_IT(&device->handle, UART_IT_RXNE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_PE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_ERR);
     device->rx_callback = NULL;
     device->rx_argument = NULL;
     SET_BIT(device->instance->RQR, USART_RQR_RXFRQ);
@@ -358,36 +390,146 @@ HAL_StatusTypeDef bsp_uart_receive_stop(bsp_uart_port_t port)
     return HAL_OK;
 }
 
+/** @brief Check that no receive character or receive event is pending. */
+uint8_t bsp_uart_receive_quiescent(bsp_uart_port_t port)
+{
+    bsp_uart_device_t *device = bsp_uart_get_device(port);
+    uint32_t interrupt_status;
+    uint32_t receive_activity;
+
+    if ((device == NULL) || (device->initialized == 0U) ||
+        (device->reconfiguring != 0U) || (device->faulted != 0U) ||
+        (device->rx_callback == NULL))
+    {
+        return 0U;
+    }
+
+    interrupt_status = READ_REG(device->instance->ISR);
+    receive_activity = USART_ISR_BUSY | USART_ISR_RXNE_RXFNE |
+                       USART_ISR_PE | USART_ISR_FE | USART_ISR_NE |
+                       USART_ISR_ORE;
+    return ((interrupt_status & receive_activity) == 0U) ? 1U : 0U;
+}
+
+/** @brief Perform the bsp_uart_set_baud_rate board-support operation. */
 HAL_StatusTypeDef bsp_uart_set_baud_rate(bsp_uart_port_t port,
                                           uint32_t baud_rate)
 {
+    return bsp_uart_set_baud_rate_synchronized(port,
+                                                baud_rate,
+                                                NULL,
+                                                NULL);
+}
+
+/** @brief Perform the bsp_uart_set_baud_rate_synchronized board-support operation. */
+HAL_StatusTypeDef bsp_uart_set_baud_rate_synchronized(
+    bsp_uart_port_t port,
+    uint32_t baud_rate,
+    bsp_uart_baud_sync_callback_t sync_callback,
+    void *argument)
+{
     bsp_uart_device_t *device = bsp_uart_get_device(port);
     uint32_t interrupt_state;
+    uint32_t irq_was_enabled;
+    uint32_t old_baud_rate;
+    uint32_t active_baud_rate;
     uint8_t receive_enabled;
+    uint8_t hardware_valid = 1U;
+    uint8_t was_faulted;
     HAL_StatusTypeDef status;
+    HAL_StatusTypeDef rollback_status;
 
-    if ((device == NULL) || (device->initialized == 0U) || (baud_rate == 0U))
+    if ((device == NULL) || (device->initialized == 0U) ||
+        (baud_rate == 0U) || (__get_IPSR() != 0U))
     {
         return HAL_ERROR;
     }
 
     interrupt_state = bsp_uart_enter_critical();
-    if ((device->tx_count != 0U) || (device->tx_state != BSP_UART_TX_IDLE))
+    if ((device->reconfiguring != 0U) || (device->tx_count != 0U) ||
+        (device->tx_state != BSP_UART_TX_IDLE))
     {
         bsp_uart_exit_critical(interrupt_state);
         return HAL_BUSY;
     }
-
-    if (device->baud_rate == baud_rate)
-    {
-        bsp_uart_exit_critical(interrupt_state);
-        return HAL_OK;
-    }
-
+    irq_was_enabled = NVIC_GetEnableIRQ(device->interrupt_number);
+    HAL_NVIC_DisableIRQ(device->interrupt_number);
+    device->reconfiguring = 1U;
+    was_faulted = device->faulted;
+    old_baud_rate = device->baud_rate;
+    active_baud_rate = old_baud_rate;
     receive_enabled = (device->rx_callback != NULL) ? 1U : 0U;
     __HAL_UART_DISABLE_IT(&device->handle, UART_IT_RXNE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_PE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_ERR);
     __HAL_UART_DISABLE_IT(&device->handle, UART_IT_TXE);
     __HAL_UART_DISABLE_IT(&device->handle, UART_IT_TC);
+    bsp_uart_exit_critical(interrupt_state);
+
+    status = HAL_OK;
+    if ((old_baud_rate != baud_rate) || (was_faulted != 0U))
+    {
+        status = bsp_uart_apply_baud_rate(device, baud_rate);
+    }
+    if (status == HAL_OK)
+    {
+        active_baud_rate = baud_rate;
+    }
+    else
+    {
+        rollback_status = bsp_uart_apply_baud_rate(device, old_baud_rate);
+        if (rollback_status != HAL_OK)
+        {
+            hardware_valid = 0U;
+        }
+    }
+
+    interrupt_state = bsp_uart_enter_critical();
+    if (hardware_valid != 0U)
+    {
+        device->baud_rate = active_baud_rate;
+        device->faulted = 0U;
+        WRITE_REG(device->instance->ICR,
+                  USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NECF |
+                  USART_ICR_ORECF | USART_ICR_TCCF);
+        SET_BIT(device->instance->RQR, USART_RQR_RXFRQ);
+    }
+    else
+    {
+        device->faulted = 1U;
+    }
+    bsp_uart_exit_critical(interrupt_state);
+
+    if ((hardware_valid != 0U) && (sync_callback != NULL))
+    {
+        sync_callback(active_baud_rate, argument);
+    }
+
+    interrupt_state = bsp_uart_enter_critical();
+    if ((hardware_valid != 0U) && (receive_enabled != 0U))
+    {
+        __HAL_UART_ENABLE_IT(&device->handle, UART_IT_RXNE);
+        __HAL_UART_ENABLE_IT(&device->handle, UART_IT_PE);
+        __HAL_UART_ENABLE_IT(&device->handle, UART_IT_ERR);
+    }
+    device->reconfiguring = 0U;
+    bsp_uart_exit_critical(interrupt_state);
+
+    HAL_NVIC_ClearPendingIRQ(device->interrupt_number);
+    if (irq_was_enabled != 0U)
+    {
+        HAL_NVIC_EnableIRQ(device->interrupt_number);
+    }
+    return status;
+}
+
+/** @brief Apply one UART baud and restore the configured FIFO policy. */
+static HAL_StatusTypeDef bsp_uart_apply_baud_rate(
+    bsp_uart_device_t *device,
+    uint32_t baud_rate)
+{
+    HAL_StatusTypeDef status;
+
     device->handle.Init.BaudRate = baud_rate;
     status = HAL_UART_Init(&device->handle);
     if (status == HAL_OK)
@@ -404,24 +546,10 @@ HAL_StatusTypeDef bsp_uart_set_baud_rate(bsp_uart_port_t port,
     {
         status = HAL_UARTEx_DisableFifoMode(&device->handle);
     }
-
-    if (status == HAL_OK)
-    {
-        device->baud_rate = baud_rate;
-        WRITE_REG(device->instance->ICR,
-                  USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NECF |
-                  USART_ICR_ORECF | USART_ICR_TCCF);
-        SET_BIT(device->instance->RQR, USART_RQR_RXFRQ);
-        if (receive_enabled != 0U)
-        {
-            __HAL_UART_ENABLE_IT(&device->handle, UART_IT_RXNE);
-        }
-    }
-
-    bsp_uart_exit_critical(interrupt_state);
     return status;
 }
 
+/** @brief Perform the bsp_uart_get_baud_rate board-support operation. */
 uint32_t bsp_uart_get_baud_rate(bsp_uart_port_t port)
 {
     bsp_uart_device_t *device = bsp_uart_get_device(port);
@@ -430,6 +558,7 @@ uint32_t bsp_uart_get_baud_rate(bsp_uart_port_t port)
            device->baud_rate : 0U;
 }
 
+/** @brief Perform the bsp_uart_set_tx_callbacks board-support operation. */
 HAL_StatusTypeDef bsp_uart_set_tx_callbacks(bsp_uart_port_t port,
                                              bsp_uart_tx_callback_t send_before,
                                              bsp_uart_tx_callback_t send_complete,
@@ -438,13 +567,15 @@ HAL_StatusTypeDef bsp_uart_set_tx_callbacks(bsp_uart_port_t port,
     bsp_uart_device_t *device = bsp_uart_get_device(port);
     uint32_t interrupt_state;
 
-    if ((device == NULL) || (device->initialized == 0U))
+    if ((device == NULL) || (device->initialized == 0U) ||
+        (device->reconfiguring != 0U) || (device->faulted != 0U))
     {
         return HAL_ERROR;
     }
 
     interrupt_state = bsp_uart_enter_critical();
-    if (device->tx_state != BSP_UART_TX_IDLE)
+    if ((device->reconfiguring != 0U) ||
+        (device->tx_state != BSP_UART_TX_IDLE))
     {
         bsp_uart_exit_critical(interrupt_state);
         return HAL_BUSY;
@@ -458,12 +589,14 @@ HAL_StatusTypeDef bsp_uart_set_tx_callbacks(bsp_uart_port_t port,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_uart_write board-support operation. */
 size_t bsp_uart_write(bsp_uart_port_t port, const uint8_t *data, size_t length)
 {
     bsp_uart_device_t *device = bsp_uart_get_device(port);
     size_t written = 0U;
 
     if ((device == NULL) || (device->initialized == 0U) ||
+        (device->reconfiguring != 0U) || (device->faulted != 0U) ||
         (data == NULL) || (length == 0U))
     {
         return 0U;
@@ -478,6 +611,11 @@ size_t bsp_uart_write(bsp_uart_port_t port, const uint8_t *data, size_t length)
         {
             uint32_t interrupt_state = bsp_uart_enter_critical();
 
+            if (device->reconfiguring != 0U)
+            {
+                bsp_uart_exit_critical(interrupt_state);
+                return written;
+            }
             if (device->tx_count < device->tx_buffer_size)
             {
                 device->tx_buffer[device->tx_write] = data[written];
@@ -526,6 +664,7 @@ size_t bsp_uart_write(bsp_uart_port_t port, const uint8_t *data, size_t length)
     return written;
 }
 
+/** @brief Perform the bsp_uart_write_string board-support operation. */
 size_t bsp_uart_write_string(bsp_uart_port_t port, const char *text)
 {
     if (text == NULL)
@@ -536,13 +675,15 @@ size_t bsp_uart_write_string(bsp_uart_port_t port, const char *text)
     return bsp_uart_write(port, (const uint8_t *)text, strlen(text));
 }
 
+/** @brief Perform the bsp_uart_tx_empty board-support operation. */
 uint8_t bsp_uart_tx_empty(bsp_uart_port_t port)
 {
     bsp_uart_device_t *device = bsp_uart_get_device(port);
     uint8_t is_empty;
     uint32_t interrupt_state;
 
-    if ((device == NULL) || (device->initialized == 0U))
+    if ((device == NULL) || (device->initialized == 0U) ||
+        (device->reconfiguring != 0U) || (device->faulted != 0U))
     {
         return 0U;
     }
@@ -555,6 +696,7 @@ uint8_t bsp_uart_tx_empty(bsp_uart_port_t port)
     return is_empty;
 }
 
+/** @brief Resolve one logical UART role to its statically allocated device. */
 static bsp_uart_device_t *bsp_uart_get_device(bsp_uart_port_t port)
 {
     if ((uint32_t)port >= (uint32_t)BSP_UART_PORT_COUNT)
@@ -565,6 +707,7 @@ static bsp_uart_device_t *bsp_uart_get_device(bsp_uart_port_t port)
     return uart_devices[(uint32_t)port];
 }
 
+/** @brief Perform the bsp_uart_device_init board-support operation. */
 static void bsp_uart_device_init(bsp_uart_device_t *device)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -622,6 +765,8 @@ static void bsp_uart_device_init(bsp_uart_device_t *device)
     device->tx_read = 0U;
     device->tx_count = 0U;
     device->tx_state = BSP_UART_TX_IDLE;
+    device->reconfiguring = 0U;
+    device->faulted = 0U;
     device->rx_callback = NULL;
     device->rx_argument = NULL;
     device->send_before = NULL;
@@ -629,6 +774,8 @@ static void bsp_uart_device_init(bsp_uart_device_t *device)
     device->tx_argument = NULL;
 
     __HAL_UART_DISABLE_IT(&device->handle, UART_IT_RXNE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_PE);
+    __HAL_UART_DISABLE_IT(&device->handle, UART_IT_ERR);
     __HAL_UART_DISABLE_IT(&device->handle, UART_IT_TXE);
     __HAL_UART_DISABLE_IT(&device->handle, UART_IT_TC);
     WRITE_REG(device->instance->ICR,
@@ -641,6 +788,7 @@ static void bsp_uart_device_init(bsp_uart_device_t *device)
     device->initialized = 1U;
 }
 
+/** @brief Perform the bsp_uart_enable_gpio_clock board-support operation. */
 static void bsp_uart_enable_gpio_clock(GPIO_TypeDef *port)
 {
     if (port == GPIOA)
@@ -693,6 +841,7 @@ static void bsp_uart_enable_gpio_clock(GPIO_TypeDef *port)
     }
 }
 
+/** @brief Perform the bsp_uart_enable_peripheral_clock board-support operation. */
 static void bsp_uart_enable_peripheral_clock(USART_TypeDef *instance)
 {
     if (instance == USART1)
@@ -733,6 +882,7 @@ static void bsp_uart_enable_peripheral_clock(USART_TypeDef *instance)
     }
 }
 
+/** @brief Perform the bsp_uart_configure_kernel_clock board-support operation. */
 static void bsp_uart_configure_kernel_clock(USART_TypeDef *instance)
 {
     RCC_PeriphCLKInitTypeDef clock_config = {0};
@@ -754,20 +904,69 @@ static void bsp_uart_configure_kernel_clock(USART_TypeDef *instance)
     }
 }
 
+/** @brief Perform the bsp_uart_irq_handler board-support operation. */
 static void bsp_uart_irq_handler(bsp_uart_device_t *device)
 {
     uint32_t interrupt_status = READ_REG(device->instance->ISR);
     uint32_t control = READ_REG(device->instance->CR1);
+    uint32_t error_events = 0U;
+    uint32_t error_clear_flags = 0U;
 
-    if (((interrupt_status & USART_ISR_RXNE_RXFNE) != 0U) &&
+    if ((interrupt_status & USART_ISR_PE) != 0U)
+    {
+        error_events |= BSP_UART_RX_EVENT_PARITY_ERROR;
+        error_clear_flags |= USART_ICR_PECF;
+    }
+    if ((interrupt_status & USART_ISR_FE) != 0U)
+    {
+        error_events |= BSP_UART_RX_EVENT_FRAMING_ERROR;
+        error_clear_flags |= USART_ICR_FECF;
+    }
+    if ((interrupt_status & USART_ISR_NE) != 0U)
+    {
+        error_events |= BSP_UART_RX_EVENT_NOISE_ERROR;
+        error_clear_flags |= USART_ICR_NECF;
+    }
+    if ((interrupt_status & USART_ISR_ORE) != 0U)
+    {
+        error_events |= BSP_UART_RX_EVENT_OVERRUN;
+        error_clear_flags |= USART_ICR_ORECF;
+    }
+
+    if (error_events != 0U)
+    {
+        bsp_uart_rx_callback_t callback = device->rx_callback;
+        uint32_t error_timestamp_ticks;
+
+        if ((interrupt_status & USART_ISR_RXNE_RXFNE) != 0U)
+        {
+            (void)READ_REG(device->instance->RDR);
+        }
+        error_timestamp_ticks = bsp_dwt_get_cycles();
+        WRITE_REG(device->instance->ICR, error_clear_flags);
+        if (callback != NULL)
+        {
+            callback(NULL,
+                     0U,
+                     error_timestamp_ticks,
+                     error_events,
+                     device->rx_argument);
+        }
+    }
+    else if (((interrupt_status & USART_ISR_RXNE_RXFNE) != 0U) &&
         ((control & USART_CR1_RXNEIE_RXFNEIE) != 0U))
     {
         uint8_t received_byte = (uint8_t)READ_REG(device->instance->RDR);
+        uint32_t end_timestamp_ticks = bsp_dwt_get_cycles();
         bsp_uart_rx_callback_t callback = device->rx_callback;
 
         if (callback != NULL)
         {
-            callback(&received_byte, 1U, device->rx_argument);
+            callback(&received_byte,
+                     1U,
+                     end_timestamp_ticks,
+                     BSP_UART_RX_EVENT_DATA,
+                     device->rx_argument);
         }
     }
 
@@ -814,11 +1013,9 @@ static void bsp_uart_irq_handler(bsp_uart_device_t *device)
             __HAL_UART_ENABLE_IT(&device->handle, UART_IT_TXE);
         }
     }
-
-    WRITE_REG(device->instance->ICR,
-              USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NECF | USART_ICR_ORECF);
 }
 
+/** @brief Perform the bsp_uart_enter_critical board-support operation. */
 static uint32_t bsp_uart_enter_critical(void)
 {
     uint32_t interrupt_state = __get_PRIMASK();
@@ -828,6 +1025,7 @@ static uint32_t bsp_uart_enter_critical(void)
     return interrupt_state;
 }
 
+/** @brief Perform the bsp_uart_exit_critical board-support operation. */
 static void bsp_uart_exit_critical(uint32_t interrupt_state)
 {
     __DMB();
@@ -838,6 +1036,7 @@ static void bsp_uart_exit_critical(uint32_t interrupt_state)
 }
 
 #if BSP_UART1_ENABLED
+/** @brief Handle the USART1_IRQHandler interrupt. */
 void USART1_IRQHandler(void)
 {
     bsp_uart_irq_handler(&uart1_device);
@@ -845,6 +1044,7 @@ void USART1_IRQHandler(void)
 #endif
 
 #if BSP_UART2_ENABLED
+/** @brief Handle the USART2_IRQHandler interrupt. */
 void USART2_IRQHandler(void)
 {
     bsp_uart_irq_handler(&uart2_device);
@@ -852,6 +1052,7 @@ void USART2_IRQHandler(void)
 #endif
 
 #if BSP_UART3_ENABLED
+/** @brief Handle the USART3_IRQHandler interrupt. */
 void USART3_IRQHandler(void)
 {
     bsp_uart_irq_handler(&uart3_device);
@@ -859,6 +1060,7 @@ void USART3_IRQHandler(void)
 #endif
 
 #if BSP_UART4_ENABLED
+/** @brief Handle the UART4_IRQHandler interrupt. */
 void UART4_IRQHandler(void)
 {
     bsp_uart_irq_handler(&uart4_device);
@@ -866,6 +1068,7 @@ void UART4_IRQHandler(void)
 #endif
 
 #if BSP_UART5_ENABLED
+/** @brief Handle the UART5_IRQHandler interrupt. */
 void UART5_IRQHandler(void)
 {
     bsp_uart_irq_handler(&uart5_device);
@@ -873,6 +1076,7 @@ void UART5_IRQHandler(void)
 #endif
 
 #if BSP_UART6_ENABLED
+/** @brief Handle the USART6_IRQHandler interrupt. */
 void USART6_IRQHandler(void)
 {
     bsp_uart_irq_handler(&uart6_device);
@@ -880,6 +1084,7 @@ void USART6_IRQHandler(void)
 #endif
 
 #if BSP_UART7_ENABLED
+/** @brief Handle the UART7_IRQHandler interrupt. */
 void UART7_IRQHandler(void)
 {
     bsp_uart_irq_handler(&uart7_device);
@@ -887,6 +1092,7 @@ void UART7_IRQHandler(void)
 #endif
 
 #if BSP_UART8_ENABLED
+/** @brief Handle the UART8_IRQHandler interrupt. */
 void UART8_IRQHandler(void)
 {
     bsp_uart_irq_handler(&uart8_device);

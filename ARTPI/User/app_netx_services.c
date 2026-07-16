@@ -1485,7 +1485,13 @@ static void app_netx_http_build_status(char *body, size_t body_size)
                              "\"rx_bytes\":%lu,\"rx_frames\":%lu,"
                              "\"replies\":%lu,\"crc_errors\":%lu,"
                              "\"malformed_frames\":%lu,"
-                             "\"ldc_overflow\":%lu,\"ldc_drop\":%lu,"
+                             "\"rtu_overflow_frames\":%lu,"
+                             "\"rtu_dropped_frames\":%lu,"
+                             "\"rtu_t15_violations\":%lu,"
+                             "\"rtu_discarded_bytes\":%lu,"
+                             "\"rtu_timestamp_errors\":%lu,"
+                             "\"rtu_rx_errors\":%lu,"
+                             "\"unsupported_rx_blocks\":%lu,"
                              "\"polls_completed\":%lu,"
                              "\"poll_timeouts\":%lu,"
                              "\"commands_queued\":%lu,"
@@ -1522,8 +1528,13 @@ static void app_netx_http_build_status(char *body, size_t body_size)
                              (unsigned long)netx_modbus_diagnostics.replied_frames,
                              (unsigned long)netx_modbus_diagnostics.crc_errors,
                              (unsigned long)netx_modbus_diagnostics.malformed_frames,
-                             (unsigned long)netx_modbus_diagnostics.ldc_overflow,
-                             (unsigned long)netx_modbus_diagnostics.ldc_drop,
+                             (unsigned long)netx_modbus_diagnostics.rtu_overflow_frames,
+                             (unsigned long)netx_modbus_diagnostics.rtu_dropped_frames,
+                             (unsigned long)netx_modbus_diagnostics.rtu_t15_violations,
+                             (unsigned long)netx_modbus_diagnostics.rtu_discarded_bytes,
+                             (unsigned long)netx_modbus_diagnostics.rtu_timestamp_errors,
+                             (unsigned long)netx_modbus_diagnostics.rtu_rx_errors,
+                             (unsigned long)netx_modbus_diagnostics.unsupported_rx_blocks,
                              (unsigned long)netx_modbus_diagnostics.polls_completed,
                              (unsigned long)netx_modbus_diagnostics.poll_timeouts,
                              (unsigned long)netx_modbus_diagnostics.commands_queued,

@@ -1,3 +1,8 @@
+/**
+ * @file bsp_sdio_wifi.h
+ * @brief ART-Pi H750 SDIO Wi-Fi BSP interface.
+ */
+
 #ifndef BSP_SDIO_WIFI_H
 #define BSP_SDIO_WIFI_H
 

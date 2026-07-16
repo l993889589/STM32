@@ -1,3 +1,8 @@
+/**
+ * @file bsp_w25q128.c
+ * @brief ART-Pi H750 SPI W25Q128 BSP implementation.
+ */
+
 #include "bsp.h"
 
 #define BSP_W25Q128_CS_PORT               GPIOA
@@ -26,6 +31,7 @@ static HAL_StatusTypeDef bsp_w25q128_page_program(uint32_t address,
                                                   const uint8_t *data,
                                                   uint16_t length);
 
+/** @brief Perform the bsp_w25q128_init board-support operation. */
 HAL_StatusTypeDef bsp_w25q128_init(void)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -50,6 +56,7 @@ HAL_StatusTypeDef bsp_w25q128_init(void)
     return (jedec_id == BSP_W25Q128_JEDEC_ID) ? HAL_OK : HAL_ERROR;
 }
 
+/** @brief Perform the bsp_w25q128_read_id board-support operation. */
 HAL_StatusTypeDef bsp_w25q128_read_id(uint32_t *jedec_id)
 {
     uint8_t tx_data[4] =
@@ -89,6 +96,7 @@ HAL_StatusTypeDef bsp_w25q128_read_id(uint32_t *jedec_id)
     return status;
 }
 
+/** @brief Perform the bsp_w25q128_read board-support operation. */
 HAL_StatusTypeDef bsp_w25q128_read(uint32_t address,
                                    uint8_t *data,
                                    size_t length)
@@ -135,6 +143,7 @@ HAL_StatusTypeDef bsp_w25q128_read(uint32_t address,
     return status;
 }
 
+/** @brief Perform the bsp_w25q128_write board-support operation. */
 HAL_StatusTypeDef bsp_w25q128_write(uint32_t address,
                                     const uint8_t *data,
                                     size_t length)
@@ -177,6 +186,7 @@ HAL_StatusTypeDef bsp_w25q128_write(uint32_t address,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_w25q128_erase_sector board-support operation. */
 HAL_StatusTypeDef bsp_w25q128_erase_sector(uint32_t address)
 {
     uint8_t command[4];
@@ -219,6 +229,7 @@ HAL_StatusTypeDef bsp_w25q128_erase_sector(uint32_t address)
     return bsp_w25q128_wait_ready(BSP_W25Q128_SECTOR_TIMEOUT_MS);
 }
 
+/** @brief Perform the bsp_w25q128_read_status board-support operation. */
 HAL_StatusTypeDef bsp_w25q128_read_status(uint8_t *status_register)
 {
     uint8_t tx_data[2] =
@@ -254,6 +265,7 @@ HAL_StatusTypeDef bsp_w25q128_read_status(uint8_t *status_register)
     return status;
 }
 
+/** @brief Perform the bsp_w25q128_select board-support operation. */
 static HAL_StatusTypeDef bsp_w25q128_select(void)
 {
     HAL_StatusTypeDef status = bsp_spi_bus_enter();
@@ -278,6 +290,7 @@ static HAL_StatusTypeDef bsp_w25q128_select(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_w25q128_deselect board-support operation. */
 static void bsp_w25q128_deselect(void)
 {
     HAL_GPIO_WritePin(BSP_W25Q128_CS_PORT,
@@ -286,6 +299,7 @@ static void bsp_w25q128_deselect(void)
     bsp_spi_bus_exit();
 }
 
+/** @brief Perform the bsp_w25q128_write_enable board-support operation. */
 static HAL_StatusTypeDef bsp_w25q128_write_enable(void)
 {
     uint8_t command = BSP_W25Q128_COMMAND_WRITE_ENABLE;
@@ -304,6 +318,7 @@ static HAL_StatusTypeDef bsp_w25q128_write_enable(void)
     return status;
 }
 
+/** @brief Perform the bsp_w25q128_wait_ready board-support operation. */
 static HAL_StatusTypeDef bsp_w25q128_wait_ready(uint32_t timeout_ms)
 {
     uint32_t elapsed_ms;
@@ -332,6 +347,7 @@ static HAL_StatusTypeDef bsp_w25q128_wait_ready(uint32_t timeout_ms)
     return HAL_TIMEOUT;
 }
 
+/** @brief Perform the bsp_w25q128_page_program board-support operation. */
 static HAL_StatusTypeDef bsp_w25q128_page_program(uint32_t address,
                                                   const uint8_t *data,
                                                   uint16_t length)

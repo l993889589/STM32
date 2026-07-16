@@ -82,8 +82,13 @@ typedef struct
     uint32_t replied_frames;
     uint32_t crc_errors;
     uint32_t malformed_frames;
-    uint32_t ldc_overflow;
-    uint32_t ldc_drop;
+    uint32_t rtu_overflow_frames;
+    uint32_t rtu_dropped_frames;
+    uint32_t rtu_t15_violations;
+    uint32_t rtu_discarded_bytes;
+    uint32_t rtu_timestamp_errors;
+    uint32_t rtu_rx_errors;
+    uint32_t unsupported_rx_blocks;
     uint32_t polls_completed;
     uint32_t poll_timeouts;
     uint32_t commands_queued;

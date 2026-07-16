@@ -1,3 +1,8 @@
+/**
+ * @file bsp_dwt.h
+ * @brief ART-Pi H750 DWT timing BSP interface.
+ */
+
 #ifndef BSP_DWT_H
 #define BSP_DWT_H
 

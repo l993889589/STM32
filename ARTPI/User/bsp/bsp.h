@@ -1,3 +1,8 @@
+/**
+ * @file bsp.h
+ * @brief ART-Pi H750 aggregate board-support interface.
+ */
+
 #ifndef BSP_H
 #define BSP_H
 

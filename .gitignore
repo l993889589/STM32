@@ -1,5 +1,6 @@
 # Keil / ARM build output
 Objects/
+Objects_*/
 Listings/
 *.o
 *.d
@@ -14,6 +15,10 @@ Listings/
 *.build_log.htm
 *.htm
 *.uvguix.*
+*.dbgconf
+
+# Project-specific Keil target directories whose names are not Objects/Listings.
+**/MDK-ARM/STM32H563RIV6_app/
 
 # IDE / local state
 .vs/

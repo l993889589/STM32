@@ -1,3 +1,8 @@
+/**
+ * @file bsp_led.c
+ * @brief ART-Pi H750 LED BSP implementation.
+ */
+
 #include "bsp.h"
 
 typedef struct
@@ -12,11 +17,13 @@ static const bsp_led_config_t led_config[BSP_LED_COUNT] =
     {GPIOC, GPIO_PIN_15}
 };
 
+/** @brief Perform the bsp_led_is_valid board-support operation. */
 static uint8_t bsp_led_is_valid(bsp_led_t led)
 {
     return ((uint32_t)led < (uint32_t)BSP_LED_COUNT) ? 1U : 0U;
 }
 
+/** @brief Perform the bsp_led_init board-support operation. */
 void bsp_led_init(void)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -38,6 +45,7 @@ void bsp_led_init(void)
     HAL_GPIO_Init(GPIOC, &gpio_config);
 }
 
+/** @brief Perform the bsp_led_on board-support operation. */
 void bsp_led_on(bsp_led_t led)
 {
     if (bsp_led_is_valid(led) != 0U)
@@ -46,6 +54,7 @@ void bsp_led_on(bsp_led_t led)
     }
 }
 
+/** @brief Perform the bsp_led_off board-support operation. */
 void bsp_led_off(bsp_led_t led)
 {
     if (bsp_led_is_valid(led) != 0U)
@@ -54,6 +63,7 @@ void bsp_led_off(bsp_led_t led)
     }
 }
 
+/** @brief Perform the bsp_led_toggle board-support operation. */
 void bsp_led_toggle(bsp_led_t led)
 {
     if (bsp_led_is_valid(led) != 0U)
@@ -62,6 +72,7 @@ void bsp_led_toggle(bsp_led_t led)
     }
 }
 
+/** @brief Perform the bsp_led_is_on board-support operation. */
 uint8_t bsp_led_is_on(bsp_led_t led)
 {
     if (bsp_led_is_valid(led) == 0U)
@@ -71,4 +82,3 @@ uint8_t bsp_led_is_on(bsp_led_t led)
 
     return (HAL_GPIO_ReadPin(led_config[led].port, led_config[led].pin) == GPIO_PIN_RESET) ? 1U : 0U;
 }
-

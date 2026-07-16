@@ -1,12 +1,19 @@
+/**
+ * @file stm32h7xx_hal_timebase_tim.c
+ * @brief STM32 HAL millisecond time base backed by a hardware timer.
+ */
+
 #include "bsp.h"
 #include "tx_api.h"
 
+/** @brief Handle the HAL_InitTick HAL callback. */
 HAL_StatusTypeDef HAL_InitTick(uint32_t tick_priority)
 {
     (void)tick_priority;
     return HAL_OK;
 }
 
+/** @brief Handle the HAL_GetTick HAL callback. */
 uint32_t HAL_GetTick(void)
 {
     static uint32_t last_cycles;
@@ -41,6 +48,7 @@ uint32_t HAL_GetTick(void)
     return pre_kernel_tick;
 }
 
+/** @brief Handle the HAL_Delay HAL callback. */
 void HAL_Delay(uint32_t delay_ms)
 {
     bsp_delay_ms(delay_ms);

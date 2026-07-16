@@ -1,3 +1,8 @@
+/**
+ * @file stm32h7xx_it.h
+ * @brief ART-Pi H750 interrupt-handler declarations.
+ */
+
 #ifndef STM32H7XX_IT_H
 #define STM32H7XX_IT_H
 

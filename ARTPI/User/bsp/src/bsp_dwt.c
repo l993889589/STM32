@@ -1,7 +1,13 @@
+/**
+ * @file bsp_dwt.c
+ * @brief ART-Pi H750 DWT timing BSP implementation.
+ */
+
 #include "bsp.h"
 
 #include <limits.h>
 
+/** @brief Perform the bsp_dwt_init board-support operation. */
 HAL_StatusTypeDef bsp_dwt_init(void)
 {
     uint32_t start_cycles;
@@ -18,16 +24,19 @@ HAL_StatusTypeDef bsp_dwt_init(void)
     return (DWT->CYCCNT != start_cycles) ? HAL_OK : HAL_ERROR;
 }
 
+/** @brief Perform the bsp_dwt_get_cycles board-support operation. */
 uint32_t bsp_dwt_get_cycles(void)
 {
     return DWT->CYCCNT;
 }
 
+/** @brief Perform the bsp_dwt_elapsed_cycles board-support operation. */
 uint32_t bsp_dwt_elapsed_cycles(uint32_t start_cycles)
 {
     return DWT->CYCCNT - start_cycles;
 }
 
+/** @brief Perform the bsp_dwt_delay_cycles board-support operation. */
 void bsp_dwt_delay_cycles(uint32_t delay_cycles)
 {
     uint32_t start_cycles = DWT->CYCCNT;
@@ -37,6 +46,7 @@ void bsp_dwt_delay_cycles(uint32_t delay_cycles)
     }
 }
 
+/** @brief Perform the bsp_dwt_delay_us board-support operation. */
 void bsp_dwt_delay_us(uint32_t delay_us)
 {
     uint32_t cycles_per_us;
@@ -63,6 +73,7 @@ void bsp_dwt_delay_us(uint32_t delay_us)
     bsp_dwt_delay_cycles(delay_us * cycles_per_us);
 }
 
+/** @brief Perform the bsp_dwt_delay_ms board-support operation. */
 void bsp_dwt_delay_ms(uint32_t delay_ms)
 {
     while (delay_ms >= 1000U)

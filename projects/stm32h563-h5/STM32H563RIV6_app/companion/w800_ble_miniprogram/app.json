@@ -1,0 +1,14 @@
+{
+  "pages": ["pages/provision/index"],
+  "window": {
+    "navigationBarTitleText": "LEDUO BLE 配网",
+    "navigationBarBackgroundColor": "#14213d",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f4f6f8"
+  },
+  "requiredPrivateInfos": [
+    "getBluetoothDevices",
+    "startBluetoothDevicesDiscovery"
+  ],
+  "sitemapLocation": "sitemap.json"
+}

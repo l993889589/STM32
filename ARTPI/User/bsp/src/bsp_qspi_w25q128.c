@@ -1,3 +1,8 @@
+/**
+ * @file bsp_qspi_w25q128.c
+ * @brief ART-Pi H750 QSPI W25Q128 BSP implementation.
+ */
+
 #include "bsp_qspi_w25q128.h"
 
 #define BSP_QSPI_COMMAND_RESET_ENABLE       0x66U
@@ -34,6 +39,7 @@ static HAL_StatusTypeDef bsp_qspi_w25q128_program_page(uint32_t address,
                                                        const uint8_t *data,
                                                        size_t length);
 
+/** @brief Perform the bsp_qspi_w25q128_init board-support operation. */
 HAL_StatusTypeDef bsp_qspi_w25q128_init(void)
 {
     GPIO_InitTypeDef gpio_config = {0};
@@ -112,6 +118,7 @@ HAL_StatusTypeDef bsp_qspi_w25q128_init(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_qspi_w25q128_read_id board-support operation. */
 HAL_StatusTypeDef bsp_qspi_w25q128_read_id(uint32_t *jedec_id)
 {
     uint8_t id[3];
@@ -136,6 +143,7 @@ HAL_StatusTypeDef bsp_qspi_w25q128_read_id(uint32_t *jedec_id)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_qspi_w25q128_read board-support operation. */
 HAL_StatusTypeDef bsp_qspi_w25q128_read(uint32_t address,
                                         uint8_t *data,
                                         size_t length)
@@ -157,6 +165,7 @@ HAL_StatusTypeDef bsp_qspi_w25q128_read(uint32_t address,
     return HAL_QSPI_Receive(&qspi_handle, data, BSP_QSPI_COMMAND_TIMEOUT_MS);
 }
 
+/** @brief Perform the bsp_qspi_w25q128_program board-support operation. */
 HAL_StatusTypeDef bsp_qspi_w25q128_program(uint32_t address,
                                            const uint8_t *data,
                                            size_t length)
@@ -187,6 +196,7 @@ HAL_StatusTypeDef bsp_qspi_w25q128_program(uint32_t address,
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_qspi_w25q128_erase_sector board-support operation. */
 HAL_StatusTypeDef bsp_qspi_w25q128_erase_sector(uint32_t address)
 {
     if(qspi_initialized == 0U || qspi_memory_mapped != 0U ||
@@ -207,6 +217,7 @@ HAL_StatusTypeDef bsp_qspi_w25q128_erase_sector(uint32_t address)
     return bsp_qspi_w25q128_wait_ready(BSP_QSPI_ERASE_TIMEOUT_MS);
 }
 
+/** @brief Perform the bsp_qspi_w25q128_enter_memory_mapped board-support operation. */
 HAL_StatusTypeDef bsp_qspi_w25q128_enter_memory_mapped(void)
 {
     QSPI_CommandTypeDef command = {0};
@@ -241,6 +252,7 @@ HAL_StatusTypeDef bsp_qspi_w25q128_enter_memory_mapped(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_qspi_w25q128_leave_memory_mapped board-support operation. */
 HAL_StatusTypeDef bsp_qspi_w25q128_leave_memory_mapped(void)
 {
     if(qspi_memory_mapped == 0U)
@@ -255,6 +267,7 @@ HAL_StatusTypeDef bsp_qspi_w25q128_leave_memory_mapped(void)
     return HAL_OK;
 }
 
+/** @brief Perform the bsp_qspi_w25q128_command board-support operation. */
 static HAL_StatusTypeDef bsp_qspi_w25q128_command(uint8_t instruction,
                                                   uint32_t address_mode,
                                                   uint32_t address,
@@ -278,6 +291,7 @@ static HAL_StatusTypeDef bsp_qspi_w25q128_command(uint8_t instruction,
     return HAL_QSPI_Command(&qspi_handle, &command, BSP_QSPI_COMMAND_TIMEOUT_MS);
 }
 
+/** @brief Perform the bsp_qspi_w25q128_write_enable board-support operation. */
 static HAL_StatusTypeDef bsp_qspi_w25q128_write_enable(void)
 {
     return bsp_qspi_w25q128_command(BSP_QSPI_COMMAND_WRITE_ENABLE,
@@ -287,6 +301,7 @@ static HAL_StatusTypeDef bsp_qspi_w25q128_write_enable(void)
                                      0U);
 }
 
+/** @brief Perform the bsp_qspi_w25q128_wait_ready board-support operation. */
 static HAL_StatusTypeDef bsp_qspi_w25q128_wait_ready(uint32_t timeout_ms)
 {
     QSPI_CommandTypeDef command = {0};
@@ -311,6 +326,7 @@ static HAL_StatusTypeDef bsp_qspi_w25q128_wait_ready(uint32_t timeout_ms)
     return HAL_QSPI_AutoPolling(&qspi_handle, &command, &polling, timeout_ms);
 }
 
+/** @brief Perform the bsp_qspi_w25q128_enable_quad board-support operation. */
 static HAL_StatusTypeDef bsp_qspi_w25q128_enable_quad(void)
 {
     uint8_t status;
@@ -342,6 +358,7 @@ static HAL_StatusTypeDef bsp_qspi_w25q128_enable_quad(void)
     return bsp_qspi_w25q128_wait_ready(BSP_QSPI_PROGRAM_TIMEOUT_MS);
 }
 
+/** @brief Perform the bsp_qspi_w25q128_program_page board-support operation. */
 static HAL_StatusTypeDef bsp_qspi_w25q128_program_page(uint32_t address,
                                                        const uint8_t *data,
                                                        size_t length)

@@ -1,3 +1,8 @@
+/**
+ * @file bsp_rs485.h
+ * @brief ART-Pi H750 RS485 BSP interface.
+ */
+
 #ifndef BSP_RS485_H
 #define BSP_RS485_H
 
@@ -12,6 +17,7 @@ HAL_StatusTypeDef bsp_rs485_init(void);
 HAL_StatusTypeDef bsp_rs485_receive_start(bsp_uart_rx_callback_t callback,
                                            void *argument);
 HAL_StatusTypeDef bsp_rs485_receive_stop(void);
+uint8_t bsp_rs485_receive_quiescent(void);
 size_t bsp_rs485_write(const uint8_t *data, size_t length);
 uint8_t bsp_rs485_tx_empty(void);
 

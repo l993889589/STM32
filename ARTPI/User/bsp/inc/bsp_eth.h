@@ -1,3 +1,8 @@
+/**
+ * @file bsp_eth.h
+ * @brief ART-Pi H750 Ethernet BSP interface.
+ */
+
 #ifndef BSP_ETH_H
 #define BSP_ETH_H
 

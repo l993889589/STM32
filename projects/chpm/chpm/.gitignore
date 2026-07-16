@@ -1,0 +1,14 @@
+/MDK-ARM/F4/
+/MDK-ARM/*.log
+/MDK-ARM/*.lst
+/MDK-ARM/*.uvguix.*
+/.vs/
+/out/
+/build/
+/work/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/CTestTestfile.cmake
+**/cmake_install.cmake
+*.user
+*.suo

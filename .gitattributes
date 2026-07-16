@@ -17,3 +17,22 @@
 *.md text eol=lf
 *.txt text eol=lf
 *.rst text eol=lf
+
+# CubeMX/CMSIS/Azure RTOS snapshots keep upstream formatting. Disable Git's
+# whitespace gate for these imported trees; project-owned BSP/app code is
+# audited separately by the repository validation scripts.
+projects/chpm/chpm/Core/** -whitespace
+projects/chpm/chpm/Drivers/** -whitespace
+projects/chpm/chpm/Middlewares/** -whitespace
+projects/chpm/chpm/USBX/** -whitespace
+projects/chpm/chpm/MDK-ARM/** -whitespace
+projects/chpm/chpm/user/** -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/Core/** -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/Drivers/** -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/Middlewares/** -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/USBX/** -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/MDK-ARM/** -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/user/ui/** -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/.mxproject -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/.gitignore -whitespace
+projects/stm32h563-h5/STM32H563RIV6_app/docs/** -whitespace

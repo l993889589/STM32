@@ -1,3 +1,8 @@
+/**
+ * @file bsp_beep.h
+ * @brief ART-Pi H750 buzzer BSP interface.
+ */
+
 #ifndef BSP_BEEP_H
 #define BSP_BEEP_H
 
