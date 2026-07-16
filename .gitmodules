@@ -4,3 +4,9 @@
 [submodule "desktop-debug-assistant"]
 	path = desktop-debug-assistant
 	url = https://github.com/l993889589/desktop-debug-assistant.git
+[submodule "STM32H563RIV6_app/Middlewares/ld_modbus"]
+	path = STM32H563RIV6_app/Middlewares/ld_modbus
+	url = https://github.com/l993889589/ld_modbus.git
+[submodule "STM32H563RIV6_app/Middlewares/ldc"]
+	path = STM32H563RIV6_app/Middlewares/ldc
+	url = https://github.com/l993889589/ldc.git

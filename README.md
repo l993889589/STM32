@@ -7,6 +7,7 @@ separate ownership boundaries.
 | --- | --- |
 | `STM32H563_Bootloader/` | Minimal secure Boot, USB recovery and OTA installer |
 | `STM32H563_App/` | Runtime application, communication services and LVGL UI |
+| `STM32H563_Modbus/` | Standalone 0x08000000 H563 + LDC + ld_modbus RS485-1 validation target |
 | `shared/` | Boot/App shared OTA contracts and reviewed third-party code |
 | `desktop-debug-assistant/` | Independent Git submodule for MQTT/HTTP host services |
 | `simulators/lvgl/` | Windows LVGL simulator source; build output stays local |
