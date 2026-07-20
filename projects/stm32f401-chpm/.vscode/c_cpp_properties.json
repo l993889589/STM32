@@ -1,0 +1,60 @@
+{
+    "configurations": [
+        {
+            "name": "STM32F401CCU6 - ThreadX - ARMClang",
+            "compilerPath": "C:/Keil_v5/ARM/ARMCLANG/Bin/armclang.exe",
+            "compilerArgs": [
+                "--target=arm-arm-none-eabi",
+                "-mcpu=cortex-m4",
+                "-mfpu=fpv4-sp-d16",
+                "-mfloat-abi=hard"
+            ],
+            "intelliSenseMode": "windows-clang-arm",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32F401xC",
+                "TX_INCLUDE_USER_DEFINE_FILE",
+                "UX_INCLUDE_USER_DEFINE_FILE"
+            ],
+            "includePath": [
+                "${workspaceFolder}/Core/Inc",
+                "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Include",
+                "${workspaceFolder}/user/bsp",
+                "${workspaceFolder}/user/drivers",
+                "${workspaceFolder}/user/services",
+                "${workspaceFolder}/user/app",
+                "${workspaceFolder}/user/ldc",
+                "${workspaceFolder}/third_party/ldc",
+                "${workspaceFolder}/user/dwin",
+                "${workspaceFolder}/third_party/dwin_protocol",
+                "${workspaceFolder}/third_party/sensors/include",
+                "${workspaceFolder}/USBX/App",
+                "${workspaceFolder}/USBX/Target",
+                "${workspaceFolder}/Middlewares/ST/usbx/common/core/inc",
+                "${workspaceFolder}/Middlewares/ST/usbx/ports/generic/inc",
+                "${workspaceFolder}/Middlewares/ST/usbx/common/usbx_device_classes/inc",
+                "${workspaceFolder}/Middlewares/ST/threadx/common/inc",
+                "${workspaceFolder}/Middlewares/ST/threadx/ports/cortex_m4/ac6/inc",
+                "${workspaceFolder}/Middlewares/ST/usbx/common/usbx_stm32_device_controllers",
+                "${workspaceFolder}/third_party/ld_modbus/include"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/Core",
+                    "${workspaceFolder}/Drivers",
+                    "${workspaceFolder}/Middlewares",
+                    "${workspaceFolder}/USBX",
+                    "${workspaceFolder}/user",
+                    "${workspaceFolder}/third_party"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}

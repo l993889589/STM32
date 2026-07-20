@@ -1,0 +1,1 @@
+/* Legacy RTOS UART worker implementation removed after the ThreadX migration. */

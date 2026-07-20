@@ -6,6 +6,8 @@ The source projects were originally developed and maintained locally and partly 
 
 ## Highlights
 
+- CHPM STM32F401CCU6 product firmware with ThreadX, USBX CDC ACM, DWIN,
+  Modbus RTU, W25Q64 parameter journaling, and portable sensor drivers.
 - STM32H563 application and bootloader work based on ThreadX, USBX, FileX, LevelX, NetX Duo, LVGL, GUIX, and Keil MDK.
 - Reusable LDC byte-stream framing and communication components for UART/RS485-style embedded links.
 - EC20 modem experiments on STM32F407, including AT command handling and MQTT/TCP workflow notes.
@@ -28,6 +30,7 @@ modules/
   ec20-stm32f407/          EC20 modem / STM32F407 experiments
 
 projects/
+  stm32f401-chpm/           CHPM STM32F401 ThreadX/USBX product firmware
   stm32h563-h5/            STM32H563 application and bootloader work
 
 docs/
@@ -54,6 +57,7 @@ Most firmware projects are Keil MDK / STM32CubeMX based.
 
 Typical entry points:
 
+- `projects/stm32f401-chpm/MDK-ARM/F4.uvprojx`
 - `projects/stm32h563-h5/STM32H563_App/MDK-ARM/STM32H563_Threadx_usbx_cdc_acm.uvprojx`
 - `projects/stm32h563-h5/STM32H563_Bootloader/MDK-ARM/STM32H563_Threadx_usbx_cdc_acm.uvprojx`
 - `boards/art-pi-stm32h750/MDK-ARM/ARTPI.uvprojx`

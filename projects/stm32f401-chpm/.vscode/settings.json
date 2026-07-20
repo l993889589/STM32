@@ -1,0 +1,18 @@
+{
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.loggingLevel": "Warning",
+    "C_Cpp.default.configurationProvider": "",
+    "clangd.enable": false,
+    "files.associations": {
+        "*.h": "c"
+    },
+    "search.exclude": {
+        "**/MDK-ARM/F4/**": true,
+        "**/work/host-tests/**": true
+    },
+    "files.watcherExclude": {
+        "**/MDK-ARM/F4/**": true,
+        "**/work/host-tests/**": true
+    }
+}
